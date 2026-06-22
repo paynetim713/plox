@@ -215,6 +215,7 @@
   const FIXED_COLORS = 5;
   const PIECE_LEN = 3;            // 每组固定 3 个色块
   const PLAYER_INTERVAL = 850;    // 玩家方块下落速度(各难度一致,稍慢更从容)
+  const JUNK_FALL = 0.006;        // 乱入方块「匀速缓降」速度(格/毫秒,约6格/秒,比自然下落快一点点)
   const DIFFS = {
     easy:   {label:"简单", sub:"干扰少", junkMin:9,  junkMax:13},
     normal: {label:"普通", sub:"干扰中", junkMin:6,  junkMax:8},
@@ -235,7 +236,7 @@
         elCleared=$("cleared"), elMaxCombo=$("maxcombo"), overlay=$("overlay");
 
   // ---------- 状态 ----------
-  let board, voff, vscale, current, next, state="start", sub="control";
+  let board, voff, vscale, vmode, current, next, state="start", sub="control";
   let score=0, cleared=0, level=1, combo=0, maxCombo=0;
   let dropAccum=0, dropInterval=800, baseInterval=720, colorCount=5, pieceLen=3, softDrop=false;
   let junkMin=3, junkMax=4, pieceUntilJunk=4, justJunked=false;   // 难度:随机乱入方块组
@@ -296,6 +297,7 @@
     board=Array.from({length:ROWS},()=>Array(COLS).fill(null));
     voff=Array.from({length:ROWS},()=>new Float32Array(COLS));
     vscale=Array.from({length:ROWS},()=>{const a=new Float32Array(COLS); a.fill(1); return a;});
+    vmode=Array.from({length:ROWS},()=>new Uint8Array(COLS));
     score=0; cleared=0; level=1; combo=0; maxCombo=0;
     baseInterval=PLAYER_INTERVAL; colorCount=FIXED_COLORS; pieceLen=PIECE_LEN;
     junkMin=DIFFS[diffKey].junkMin; junkMax=DIFFS[diffKey].junkMax;
@@ -426,11 +428,11 @@
       for(let r=ROWS-1;r>=0;r--){
         if(board[r][c]!=null){
           if(w!==r){ board[w][c]=board[r][c]; board[r][c]=null;
-            voff[w][c]=r-w; vscale[w][c]=vscale[r][c]; voff[r][c]=0; vscale[r][c]=1; }
+            voff[w][c]=r-w; vmode[w][c]=0; vscale[w][c]=vscale[r][c]; voff[r][c]=0; vmode[r][c]=0; vscale[r][c]=1; }
           w--;
         }
       }
-      for(let r=w;r>=0;r--){ board[r][c]=null; voff[r][c]=0; vscale[r][c]=1; }
+      for(let r=w;r>=0;r--){ board[r][c]=null; voff[r][c]=0; vmode[r][c]=0; vscale[r][c]=1; }
     }
   }
   function beginResolve(){
@@ -452,7 +454,7 @@
   }
   function applyClear(){
     for(const key of clearing){ const [r,c]=key.split(",").map(Number);
-      spawnParticles(c,r,board[r][c]); board[r][c]=null; voff[r][c]=0; vscale[r][c]=1; }
+      spawnParticles(c,r,board[r][c]); board[r][c]=null; voff[r][c]=0; vmode[r][c]=0; vscale[r][c]=1; }
     clearing=null; gravity(); beginResolve();
   }
 
@@ -479,7 +481,7 @@
       for(let k=1;k<=PIECE_LEN;k++){
         const r=top-k;
         if(r<0){ overflow=true; break; }
-        board[r][c]=rc(); voff[r][c]=-top; vscale[r][c]=1; added++;  // 整组从顶部落下
+        board[r][c]=rc(); voff[r][c]=-Math.min(top,7); vmode[r][c]=1; vscale[r][c]=1; added++;  // 整组匀速缓降(最多 7 格)
       }
       if(overflow) break;
     }
@@ -517,7 +519,10 @@
     for(let i=popups.length-1;i>=0;i--){ const q=popups[i];
       q.y-=CELL*0.03*k; q.life-=0.02*k; if(q.life<=0) popups.splice(i,1); }
     for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
-      if(voff[r][c]!==0){ voff[r][c]*=Math.pow(0.80,k); if(Math.abs(voff[r][c])<0.02) voff[r][c]=0; }
+      if(voff[r][c]!==0){
+        if(vmode[r][c]===1){ voff[r][c]+=JUNK_FALL*dt; if(voff[r][c]>=0){ voff[r][c]=0; vmode[r][c]=0; } } // 乱入:匀速缓降
+        else { voff[r][c]*=Math.pow(0.80,k); if(Math.abs(voff[r][c])<0.02) voff[r][c]=0; }                // 其它:快速回落
+      }
       if(vscale[r][c]!==1){ vscale[r][c]+=(1-vscale[r][c])*Math.min(1,0.22*k); if(Math.abs(vscale[r][c]-1)<0.01) vscale[r][c]=1; }
     }
   }
@@ -809,6 +814,7 @@
   board=Array.from({length:ROWS},()=>Array(COLS).fill(null));
   voff=Array.from({length:ROWS},()=>new Float32Array(COLS));
   vscale=Array.from({length:ROWS},()=>{const a=new Float32Array(COLS); a.fill(1); return a;});
+  vmode=Array.from({length:ROWS},()=>new Uint8Array(COLS));
   $("foot").textContent = isMobile
     ? "点击=旋转 · 左右滑=移动 · 下滑=速降"
     : "← → 移动 · ↑ 旋转 · ↓ 加速 · 空格 速降 · P 暂停";
