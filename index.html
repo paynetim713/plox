@@ -309,7 +309,7 @@
   function spawn(){
     current=next; next=newPiece();
     current.row=0; current.col=(COLS/2)|0;
-    visRow=0; visCol=current.col;
+    visRow=0; visCol=current.col; dropAccum=0;   // 复位累计,避免新方块"半格弹出"/首步过早
     if(!valid(current.row,current.col,current.colors)){ gameOver(); return; }
     drawNext();
   }
@@ -330,12 +330,13 @@
       $("segHint").textContent=DIFFS[diffKey].sub;
     }));
     $("playBtn").addEventListener("click", start);
-    $("lbLink").addEventListener("click", ()=>showLeaderboard(-1));
+    $("lbLink").addEventListener("click", ()=>showLeaderboard());
   }
   const segBtn=k=>'<b class="'+(k===diffKey?'on':'')+'" data-k="'+k+'">'+DIFFS[k].label+'</b>';
 
-  // ---------- 排行榜(本机持久化;留好接全局后端的接口)----------
-  const LB_KEY="plox_lb", NAME_KEY="plox_name", LB_MAX=10;
+  // ---------- 排行榜:本机持久化 + 全球共享 ----------
+  const LB_KEY="plox_lb", NAME_KEY="plox_name", LB_MAX=10, GLB_MAX=30, GLB_SHOW=20;
+  const GLB_URL="https://api.restful-api.dev/objects/ff8081819d82fab6019ef0c35c6b4ad5";  // 全球榜后端(无需登录, 支持跨域)
   function getLB(){ try{ return JSON.parse(localStorage.getItem(LB_KEY))||[]; }catch(e){ return []; } }
   function saveLB(a){ try{ localStorage.setItem(LB_KEY, JSON.stringify(a.slice(0,LB_MAX))); }catch(e){} }
   function qualifies(s){ if(s<=0) return false; const lb=getLB(); return lb.length<LB_MAX || s>lb[lb.length-1].score; }
@@ -347,34 +348,83 @@
     const trimmed=lb.slice(0,LB_MAX); saveLB(trimmed);
     return trimmed.indexOf(entry);
   }
-  function lbTable(hi){
-    const lb=getLB();
-    if(!lb.length) return '<p>还没有记录,快来抢第一名!</p>';
-    const medal=['🥇','🥈','🥉'];
+  // 开放写入的后端 → 清洗脏/伪造数据
+  function sanitize(arr){
+    if(!Array.isArray(arr)) return [];
+    return arr.filter(e=>e && typeof e.name==="string" && Number.isFinite(e.score) && e.score>=0 && e.score<1e7)
+      .map(e=>({name:String(e.name).slice(0,10), score:Math.floor(e.score), diff:typeof e.diff==="string"?e.diff.slice(0,8):""}))
+      .sort((a,b)=>b.score-a.score).slice(0,GLB_MAX);
+  }
+  function withTimeout(ms){ try{ const c=new AbortController(); setTimeout(()=>c.abort(),ms); return c.signal; }catch(e){ return undefined; } }
+  async function fetchGlobal(){
+    try{ const r=await fetch(GLB_URL,{cache:"no-store", signal:withTimeout(8000)}); if(!r.ok) throw 0;
+      const j=await r.json(); return sanitize(j && j.data && j.data.scores); }
+    catch(e){ return null; }
+  }
+  async function submitGlobal(entry){
+    let last=null;
+    for(let attempt=0; attempt<3; attempt++){   // 开放后端可能被并发覆盖 → 校验+重试自愈
+      try{
+        const cur=await fetchGlobal();
+        const list=sanitize((cur||[]).concat([entry]));
+        const made=list.some(e=>e.name===entry.name && e.score===entry.score);
+        const r=await fetch(GLB_URL,{method:"PUT",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({name:"PLOX_GLOBAL_LEADERBOARD",data:{scores:list}}), signal:withTimeout(8000)});
+        if(!r.ok) throw 0;
+        last=list;
+        if(!made) return list;                  // 没进前30,无需校验
+        const after=await fetchGlobal();
+        if(after && after.some(e=>e.name===entry.name && e.score===entry.score)) return after;
+      }catch(e){ /* 重试 */ }
+    }
+    return last;
+  }
+  function lbTable(list, hiName, hiScore){
+    if(!list || !list.length) return '<p>还没有记录,快来抢第一名!</p>';
+    const medal=['🥇','🥈','🥉']; let hit=false;
     let h='<table class="lb">';
-    lb.forEach((e,i)=>{ h+='<tr class="'+(i===hi?'me':'')+'"><td class="rk">'+(medal[i]||(i+1))+
-      '</td><td class="nm">'+escapeHtml(e.name)+'</td><td class="sc">'+e.score+'</td></tr>'; });
+    list.slice(0,GLB_SHOW).forEach((e,i)=>{
+      const me=!hit && hiName && e.name===hiName && (hiScore==null || e.score===hiScore);
+      if(me) hit=true;
+      h+='<tr class="'+(me?'me':'')+'"><td class="rk">'+(medal[i]||(i+1))+
+        '</td><td class="nm">'+escapeHtml(e.name)+'</td><td class="sc">'+e.score+'</td></tr>'; });
     return h+'</table>';
   }
-  function showLeaderboard(hi){
-    state="menu"; stopMusic();
-    overlay.innerHTML='<h1>🏆 排行榜</h1>'+lbTable(hi==null?-1:hi)+
-      '<p style="font-size:11px">最高分排名(本设备)</p>'+
-      '<button class="play" id="lbBack">返回</button>';
+  function lbScreen(inner, sub){
+    overlay.innerHTML='<h1>🏆 排行榜</h1>'+inner+
+      '<p style="font-size:11px">'+sub+'</p><button class="play" id="lbBack">返回</button>';
     overlay.classList.remove("hidden");
     $("lbBack").addEventListener("click", showMenu);
   }
+  function showLeaderboard(hiName, hiScore){
+    state="menu"; stopMusic();
+    const hi=hiName || (localStorage.getItem(NAME_KEY)||"");
+    lbScreen('<p style="font-size:12px;color:var(--dim)">加载全球榜…</p>','');
+    fetchGlobal().then(g=>{
+      if(state!=="menu") return;
+      if(g!==null) lbScreen(lbTable(g,hi,hiScore),'🌍 全球排行榜');
+      else lbScreen(lbTable(getLB(),hi,hiScore),'⚠ 离线 · 仅显示本机');
+    });
+  }
   function showNameEntry(){
     state="menu"; stopMusic();
+    const snapScore=score, snapDiff=diffKey;   // 快照,避免异步提交期间被改动
     const last=localStorage.getItem(NAME_KEY)||"YOU";
     overlay.innerHTML='<h1>新纪录!</h1>'+
       '<p class="big">得分 <b style="color:#fff">'+score+'</b> · 登上排行榜</p>'+
       '<input class="nameIn" id="nameIn" maxlength="8" value="'+escapeHtml(last)+'" autocomplete="off" />'+
-      '<button class="play" id="nameOk">保存</button>';
+      '<button class="play" id="nameOk">保存并上传</button>';
     overlay.classList.remove("hidden");
     const inp=$("nameIn"); setTimeout(()=>{ inp.focus(); inp.select(); },40);
-    const submit=()=>{ const nm=(inp.value.trim()||"YOU"); localStorage.setItem(NAME_KEY,nm.toUpperCase());
-      const idx=addToLB(nm); showLeaderboard(idx); };
+    let submitting=false;
+    const submit=async()=>{
+      if(submitting) return; submitting=true;
+      const raw=(inp.value.trim()||"YOU"); const nm=raw.toUpperCase().slice(0,10);
+      localStorage.setItem(NAME_KEY,nm); addToLB(raw);
+      overlay.innerHTML='<h1>上传中…</h1><p style="font-size:12px;color:var(--dim)">正在提交到全球排行榜</p>';
+      await submitGlobal({name:nm, score:snapScore, diff:snapDiff});
+      showLeaderboard(nm, snapScore);
+    };
     $("nameOk").addEventListener("click", submit);
     inp.addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); submit(); } });
   }
@@ -396,7 +446,7 @@
       '<div class="foot" id="backMenu" style="cursor:pointer;text-decoration:underline">选择难度</div>';
     overlay.classList.remove("hidden");
     $("playBtn").addEventListener("click", start);
-    $("lbLink2").addEventListener("click", ()=>showLeaderboard(-1));
+    $("lbLink2").addEventListener("click", ()=>showLeaderboard());
     $("backMenu").addEventListener("click", showMenu);
   }
 
@@ -525,6 +575,14 @@
       }
       if(vscale[r][c]!==1){ vscale[r][c]+=(1-vscale[r][c])*Math.min(1,0.22*k); if(Math.abs(vscale[r][c]-1)<0.01) vscale[r][c]=1; }
     }
+    // 玩家方块:连续平滑下落(消除"跳一格/掉帧"的卡顿感)
+    if(state==="playing" && current && sub==="control"){
+      const iv = softDrop ? Math.min(55,dropInterval) : dropInterval;
+      const canFall = valid(current.row+1,current.col,current.colors);
+      visRow = current.row + (canFall ? Math.max(0,Math.min(1, dropAccum/iv)) : 0);
+      visCol += (current.col - visCol) * Math.min(1, dt*0.022);   // 横移平滑(时间相关,低帧不卡)
+      if(Math.abs(visCol-current.col) < 0.01) visCol = current.col;
+    }
   }
 
   // ---------- 渲染 ----------
@@ -577,9 +635,7 @@
     }
 
     if(state==="playing"&&current&&sub==="control"){
-      visRow+=(current.row-visRow)*0.35; visCol+=(current.col-visCol)*0.45;
-      if(Math.abs(visRow-current.row)<0.02) visRow=current.row;
-      if(Math.abs(visCol-current.col)<0.02) visCol=current.col;
+      // visRow/visCol 由 updateFx 连续插值,这里只负责画
       if(ghostOn){ const gr=ghostRow(); for(let i=0;i<current.colors.length;i++){ const r=gr+i; if(r>=0) drawBlock(ctx,current.col,r,current.colors[i],{ghost:true}); } }
       for(let i=0;i<current.colors.length;i++) drawBlock(ctx,visCol,visRow+i,current.colors[i],{glow:1.1});
     }
