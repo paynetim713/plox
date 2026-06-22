@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <meta name="theme-color" content="#0a0118" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -21,14 +21,15 @@
   html,body{height:100%; margin:0;}
   body{
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
-    color:var(--txt); overflow:hidden;
+    color:var(--txt); overflow:hidden; position:fixed; inset:0; width:100%; height:100%;
     background:
       radial-gradient(900px 600px at 20% -10%, #2a0a55 0%, transparent 60%),
       radial-gradient(700px 500px at 100% 20%, #4a0a40 0%, transparent 55%),
       linear-gradient(160deg, var(--bg0), var(--bg1));
     display:flex; flex-direction:column; align-items:center;
-    justify-content:flex-start; padding:10px 10px env(safe-area-inset-bottom,10px);
-    user-select:none; touch-action:none;
+    justify-content:flex-start; padding:8px 10px env(safe-area-inset-bottom,8px);
+    user-select:none; -webkit-user-select:none; -webkit-touch-callout:none;
+    touch-action:none; overscroll-behavior:none;
   }
   header{width:100%; max-width:520px; text-align:center; margin:2px 0 8px;}
   .title{
@@ -39,10 +40,11 @@
   }
   .sub{font-size:11px; color:var(--dim); letter-spacing:.28em; margin-top:3px;}
 
-  .toprow{width:100%; max-width:520px; display:flex; gap:8px; margin-bottom:8px;}
+  .toprow{width:100%; max-width:520px; display:flex; gap:6px; margin-bottom:8px;}
   .mini{flex:1; background:var(--panel); border:1px solid var(--line); color:var(--dim);
-    border-radius:10px; padding:6px; font-size:12px; font-weight:700; cursor:pointer;
-    display:flex; align-items:center; justify-content:center; gap:5px; transition:.12s;}
+    border-radius:10px; padding:6px 4px; font-size:12px; font-weight:700; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; gap:4px; transition:.12s;}
+  .mini .ic{font-size:14px; line-height:1;}
   .mini.on{color:var(--accent); border-color:rgba(41,197,255,.5); text-shadow:0 0 10px rgba(41,197,255,.5);}
   .mini:active{transform:translateY(1px);}
 
@@ -55,9 +57,9 @@
 
   .stage{position:relative; width:100%; max-width:520px;
     display:flex; gap:10px; align-items:flex-start; justify-content:center;}
-  .boardWrap{position:relative; border-radius:14px; overflow:hidden;
+  .boardWrap{position:relative; border-radius:14px; overflow:hidden; touch-action:none;
     box-shadow:0 0 0 1px rgba(150,90,255,.25), 0 18px 50px rgba(0,0,0,.55), inset 0 0 60px rgba(80,0,140,.25);}
-  canvas{display:block;}
+  canvas{display:block; touch-action:none;}
 
   .side{display:flex; flex-direction:column; gap:8px; width:96px; flex:0 0 auto;}
   .card{background:var(--panel); border:1px solid var(--line); border-radius:12px;
@@ -66,20 +68,26 @@
   #nextCv{display:block; margin:0 auto; border-radius:8px;}
   .card .v{font-size:18px; font-weight:800; text-align:center; font-variant-numeric:tabular-nums;}
 
-  .ctrls{width:100%; max-width:520px; margin-top:10px;
-    display:grid; grid-template-columns:repeat(4,1fr); gap:8px;}
-  .btn{background:linear-gradient(180deg, rgba(60,25,110,.9), rgba(35,12,70,.9));
-    border:1px solid rgba(160,100,255,.3); color:var(--txt);
-    border-radius:14px; padding:14px 4px; font-size:13px; font-weight:700;
-    display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer;
-    transition:transform .05s, filter .1s;}
-  .btn .ico{font-size:20px; line-height:1;}
-  .btn:active{transform:translateY(2px); filter:brightness(1.4);}
+  .foot{margin-top:10px; color:var(--dim); font-size:11px; letter-spacing:.06em; opacity:.75; text-align:center;}
+  /* ---- 移动端(触屏):去掉侧栏、放大棋盘、纯手势操作 ---- */
+  body.mobile header{margin:0 0 4px;}
+  body.mobile .sub{display:none;}
+  body.mobile .title{font-size:22px;}
+  body.mobile .side{display:none;}
+  body.mobile .hud{margin-bottom:6px;}
+  body.mobile .stat{padding:5px 4px;}
+  body.mobile .stat .v{font-size:17px;}
+  body.mobile .mini .lab{display:none;}
+  body.mobile .mini{padding:8px 2px;}
+  body.mobile .mini .ic{font-size:17px;}
+  body.mobile .foot{margin-top:6px; font-size:11px;}
+  /* ---- 桌面端:用键盘,隐藏手势提示 ---- */
+  body.desktop .foot{font-size:10px; letter-spacing:.1em; opacity:.7;}
 
   .overlay{position:absolute; inset:0; display:flex; flex-direction:column; gap:12px;
     align-items:center; justify-content:center; text-align:center; padding:22px;
     background:radial-gradient(circle at 50% 38%, rgba(20,4,45,.84), rgba(5,0,15,.95));
-    backdrop-filter:blur(4px); z-index:5;}
+    backdrop-filter:blur(4px); z-index:5; overflow-y:auto;}
   .overlay.hidden{display:none;}
   .overlay h1{margin:0; font-size:34px; font-weight:900; letter-spacing:.16em;
     background:linear-gradient(90deg,var(--accent2),var(--accent));
@@ -101,7 +109,6 @@
   .play:active{transform:scale(.96);}
   kbd{background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.2);
     border-radius:5px; padding:1px 6px; font-size:11px; font-family:inherit;}
-  .foot{margin-top:10px; color:var(--dim); font-size:10px; letter-spacing:.1em; opacity:.7;}
   .link{margin-top:4px; color:var(--accent); font-size:12px; font-weight:700; cursor:pointer; text-decoration:underline; opacity:.9;}
   .lb{width:100%; max-width:300px; margin:2px auto 4px; border-collapse:collapse; font-variant-numeric:tabular-nums;}
   .lb td{padding:6px 8px; font-size:14px; border-bottom:1px solid rgba(150,90,255,.15);}
@@ -123,10 +130,11 @@
   </header>
 
   <div class="toprow">
-    <div class="mini on" id="ghostBtn">👻 落点</div>
-    <div class="mini on" id="musicBtn">🎵 音乐</div>
-    <div class="mini on" id="soundBtn">🔊 音效</div>
-    <div class="mini" id="pauseBtn">⏸ 暂停</div>
+    <div class="mini" id="fsBtn"><span class="ic">⛶</span><span class="lab">全屏</span></div>
+    <div class="mini on" id="ghostBtn"><span class="ic">👻</span><span class="lab">落点</span></div>
+    <div class="mini on" id="musicBtn"><span class="ic">🎵</span><span class="lab">音乐</span></div>
+    <div class="mini on" id="soundBtn"><span class="ic">🔊</span><span class="lab">音效</span></div>
+    <div class="mini" id="pauseBtn"><span class="ic">⏸</span><span class="lab">暂停</span></div>
   </div>
 
   <div class="hud">
@@ -150,14 +158,7 @@
     </div>
   </div>
 
-  <div class="ctrls">
-    <div class="btn" id="bLeft"><span class="ico">◀</span>左移</div>
-    <div class="btn" id="bRot"><span class="ico">⟳</span>旋转</div>
-    <div class="btn" id="bRight"><span class="ico">▶</span>右移</div>
-    <div class="btn" id="bDrop"><span class="ico">⤓</span>速降</div>
-  </div>
-
-  <div class="foot">ALIGN 3+ · CHAIN COMBOS · SURVIVE</div>
+  <div class="foot" id="foot">点击=旋转 · 左右滑=移动 · 下滑=速降</div>
 
 <script>
 (() => {
@@ -173,12 +174,19 @@
     {fill:"#ff5a4d", glow:"#ff9d94"}, // 红
     {fill:"#b06cff", glow:"#d6b3ff"}, // 紫
   ];
+  // 难度 = 方块下落速度/密度(interval 越小越快越难),颜色数固定
+  const FIXED_COLORS = 5;
   const DIFFS = {
-    easy:   {label:"简单", colors:4, interval:920},
-    normal: {label:"普通", colors:5, interval:780},
-    hard:   {label:"困难", colors:6, interval:620},
+    easy:   {label:"简单", sub:"慢速",   interval:1080, step:40},
+    normal: {label:"普通", sub:"适中",   interval:720,  step:55},
+    hard:   {label:"困难", sub:"快速",   interval:430,  step:60},
   };
   const CLEAR_MS = 240;
+  const _ui = (location.search.match(/[?&]ui=(mobile|desktop)/)||[])[1];
+  const isMobile = _ui ? _ui==="mobile"
+    : (matchMedia("(pointer: coarse)").matches ||
+       ("ontouchstart" in window && Math.min(screen.width,screen.height) < 820));
+  document.body.classList.add(isMobile ? "mobile" : "desktop");
 
   // ---------- DOM ----------
   const cv=document.getElementById("board"), ctx=cv.getContext("2d");
@@ -203,11 +211,17 @@
 
   // ---------- 尺寸自适应 ----------
   function resize(){
-    const sideW = window.innerWidth<430 ? 78 : 96;
-    const maxStage = Math.min(520, window.innerWidth-20);
-    const availW = maxStage - sideW - 10;
-    const availH = window.innerHeight*0.60;
-    CELL = Math.max(22, Math.floor(Math.min(availW/COLS, availH/ROWS)));
+    let availW, availH;
+    if(isMobile){
+      // 无侧栏、无大按钮:棋盘尽量铺满
+      availW = Math.min(window.innerWidth - 12, 560);
+      availH = window.innerHeight - 168;           // 预留:标题+开关+分数条+提示
+    }else{
+      const sideW = window.innerWidth<430 ? 78 : 96;
+      availW = Math.min(520, window.innerWidth-20) - sideW - 10;
+      availH = window.innerHeight*0.62;
+    }
+    CELL = Math.max(20, Math.floor(Math.min(availW/COLS, availH/ROWS)));
     dpr = Math.min(window.devicePixelRatio||1, 2);
     cv.width=COLS*CELL*dpr; cv.height=ROWS*CELL*dpr;
     cv.style.width=COLS*CELL+"px"; cv.style.height=ROWS*CELL+"px";
@@ -237,7 +251,7 @@
     voff=Array.from({length:ROWS},()=>new Float32Array(COLS));
     vscale=Array.from({length:ROWS},()=>{const a=new Float32Array(COLS); a.fill(1); return a;});
     score=0; cleared=0; level=1; combo=0; maxCombo=0;
-    baseInterval=DIFFS[diffKey].interval; colorCount=DIFFS[diffKey].colors;
+    baseInterval=DIFFS[diffKey].interval; colorCount=FIXED_COLORS;
     dropInterval=baseInterval; dropAccum=0; softDrop=false; clearing=null; sub="control";
     shakeT=0; particles.length=0; popups.length=0;
     next=newPiece(); spawn(); syncHUD();
@@ -257,8 +271,9 @@
       '<div class="diffRow" id="diffRow">'+
         diffBtn("easy")+diffBtn("normal")+diffBtn("hard")+
       '</div>'+
-      '<p>电脑：<kbd>←</kbd><kbd>→</kbd>移动 · <kbd>↑</kbd>旋转 · <kbd>↓</kbd>加速 · <kbd>空格</kbd>速降<br>'+
-      '手机：点击旋转 · 左右滑动 · 向下滑速降(或用下方按钮)</p>'+
+      (isMobile
+        ? '<p><b style="color:#eae0ff">点击</b>屏幕旋转 · <b style="color:#eae0ff">左右滑</b>移动 · <b style="color:#eae0ff">向下滑</b>速降</p>'
+        : '<p><kbd>←</kbd><kbd>→</kbd>移动 · <kbd>↑</kbd>旋转 · <kbd>↓</kbd>加速 · <kbd>空格</kbd>速降 · <kbd>P</kbd>暂停</p>')+
       '<button class="play" id="playBtn">开始游戏</button>'+
       '<div class="link" id="lbLink">🏆 查看排行榜</div>';
     overlay.classList.remove("hidden");
@@ -270,7 +285,7 @@
     $("lbLink").addEventListener("click", ()=>showLeaderboard(-1));
   }
   const diffBtn=k=>'<div class="diff'+(k===diffKey?' sel':'')+'" data-k="'+k+'">'+DIFFS[k].label+
-    '<small>'+DIFFS[k].colors+' 色</small></div>';
+    '<small>'+DIFFS[k].sub+'</small></div>';
 
   // ---------- 排行榜(本机持久化;留好接全局后端的接口)----------
   const LB_KEY="plox_lb", NAME_KEY="plox_name", LB_MAX=10;
@@ -382,7 +397,7 @@
     const gained = m.size*10*combo + bonus*combo;
     score+=gained; cleared+=m.size;
     const nl=Math.floor(cleared/24)+1;
-    if(nl>level){ level=nl; dropInterval=Math.max(90, baseInterval-(level-1)*55); }
+    if(nl>level){ level=nl; dropInterval=Math.max(80, baseInterval-(level-1)*DIFFS[diffKey].step); }
     clearing=m; clearTimer=CLEAR_MS; flashPulse=0;
     shakeT=Math.min(460, 120+m.size*30+combo*45);
     spawnPopup(gained, combo);
@@ -442,7 +457,9 @@
     const cx=(colF+0.5)*cell, cy=(rowF+0.5)*cell, x=cx-s/2, y=cy-s/2;
     const col=COLORS[idx]||COLORS[0];
     g.save();
-    if(opt.ghost){ g.globalAlpha=.22; g.strokeStyle=col.glow; g.lineWidth=2;
+    if(opt.ghost){ // 实心半透明落点(看得出颜色)
+      g.globalAlpha=.34; g.fillStyle=col.fill; rr(g,x,y,s,s,cell*0.18); g.fill();
+      g.globalAlpha=.85; g.strokeStyle=col.glow; g.lineWidth=Math.max(1.5,cell*0.05);
       rr(g,x,y,s,s,cell*0.18); g.stroke(); g.restore(); return; }
     g.shadowColor=col.glow; g.shadowBlur=cell*0.45*(opt.glow||1);
     const grad=g.createLinearGradient(x,y,x,y+s);
@@ -495,6 +512,21 @@
       if(q.sub){ ctx.shadowColor="#ff3df5"; ctx.fillStyle="#ffb0f4";
         ctx.font="800 "+Math.round(CELL*0.42)+"px system-ui,sans-serif"; ctx.fillText(q.sub,q.x,q.y+CELL*0.6); }
       ctx.restore(); }
+
+    // 移动端:画布内显示「下一个」(侧栏已隐藏)
+    if(isMobile && next && (state==="playing"||state==="paused")){
+      const pc=Math.max(11,CELL*0.44), pad=5, pw=pc+pad*2, ph=pc*3+pad+16, px=COLS*CELL-pw-6, py=6;
+      ctx.save();
+      ctx.fillStyle="rgba(8,2,20,.74)"; rr(ctx,px,py,pw,ph,9); ctx.fill();
+      ctx.fillStyle="#9b86c9"; ctx.textAlign="center"; ctx.font="700 9px system-ui,sans-serif";
+      ctx.fillText("NEXT", px+pw/2, py+11);
+      for(let i=0;i<3;i++){ const col=COLORS[next.colors[i]]||COLORS[0];
+        const bx=px+pad, by=py+15+i*pc, s=pc-3;
+        ctx.shadowColor=col.glow; ctx.shadowBlur=7;
+        const gr=ctx.createLinearGradient(bx,by,bx,by+s); gr.addColorStop(0,col.glow); gr.addColorStop(1,col.fill);
+        ctx.fillStyle=gr; rr(ctx,bx,by,s,s,s*0.2); ctx.fill(); ctx.shadowBlur=0; }
+      ctx.restore();
+    }
 
     ctx.restore();
   }
@@ -566,26 +598,41 @@
   });
   document.addEventListener("keyup",e=>{ if(e.key==="ArrowDown") softDrop=false; });
 
-  // ---------- 按钮 ----------
-  function hold(el,fn,rep){ let t=null;
-    const down=e=>{ e.preventDefault(); fn(); if(rep){ t=setTimeout(function r(){ fn(); t=setTimeout(r,90);},220);} };
-    const up=()=>{ if(t){clearTimeout(t);t=null;} };
-    el.addEventListener("pointerdown",down); el.addEventListener("pointerup",up);
-    el.addEventListener("pointerleave",up); el.addEventListener("pointercancel",up); }
-  hold($("bLeft"),()=>move(-1),true); hold($("bRight"),()=>move(1),true);
-  $("bRot").addEventListener("pointerdown",e=>{e.preventDefault();rotate();});
-  $("bDrop").addEventListener("pointerdown",e=>{e.preventDefault();hardDrop();});
+  // ---------- 防止移动端缩放(双击放大 / 双指捏合)----------
+  document.addEventListener("gesturestart", e=>e.preventDefault());
+  document.addEventListener("gesturechange", e=>e.preventDefault());
+  document.addEventListener("touchstart", e=>{ if(e.touches.length>1) e.preventDefault(); }, {passive:false});
+  let lastTouchEnd=0;
+  document.addEventListener("touchend", e=>{ const now=performance.now();
+    if(now-lastTouchEnd<=350) e.preventDefault(); lastTouchEnd=now; }, {passive:false});
+  document.addEventListener("dblclick", e=>e.preventDefault());
 
-  // ---------- 触摸滑动 ----------
+  // ---------- 触摸操作:点=旋转,左右滑=移动,下滑=速降 ----------
   let tS=null;
-  cv.addEventListener("touchstart",e=>{ const t=e.touches[0]; tS={x:t.clientX,y:t.clientY,t:performance.now(),moved:0,lastX:t.clientX}; },{passive:true});
-  cv.addEventListener("touchmove",e=>{ if(!tS||!playing())return; const t=e.touches[0]; const dx=t.clientX-tS.lastX;
-    if(Math.abs(dx)>=CELL*0.7){ move(dx>0?1:-1); tS.lastX=t.clientX; tS.moved+=Math.abs(dx); } },{passive:true});
-  cv.addEventListener("touchend",e=>{ if(!tS)return; const t=e.changedTouches[0];
+  cv.addEventListener("touchstart",e=>{ e.preventDefault(); const t=e.touches[0];
+    tS={x:t.clientX,y:t.clientY,t:performance.now(),moved:0,lastX:t.clientX}; },{passive:false});
+  cv.addEventListener("touchmove",e=>{ e.preventDefault(); if(!tS||!playing())return;
+    const t=e.touches[0]; const dx=t.clientX-tS.lastX;
+    if(Math.abs(dx)>=CELL*0.75){ move(dx>0?1:-1); tS.lastX=t.clientX; tS.moved+=Math.abs(dx); } },{passive:false});
+  cv.addEventListener("touchend",e=>{ e.preventDefault(); if(!tS)return; const t=e.changedTouches[0];
     const dx=t.clientX-tS.x, dy=t.clientY-tS.y, dt=performance.now()-tS.t;
     if(dy>CELL*1.5&&Math.abs(dy)>Math.abs(dx)) hardDrop();
-    else if(tS.moved<CELL*0.5&&Math.abs(dx)<14&&Math.abs(dy)<14&&dt<260) rotate();
-    tS=null; },{passive:true});
+    else if(tS.moved<CELL*0.5&&Math.abs(dx)<16&&Math.abs(dy)<16&&dt<280) rotate();
+    tS=null; },{passive:false});
+
+  // ---------- 全屏 ----------
+  function toggleFullscreen(){
+    const el=document.documentElement;
+    try{
+      if(!document.fullscreenElement && !document.webkitFullscreenElement){
+        (el.requestFullscreen||el.webkitRequestFullscreen||(()=>{})).call(el);
+      }else{
+        (document.exitFullscreen||document.webkitExitFullscreen||(()=>{})).call(document);
+      }
+    }catch(e){}
+  }
+  $("fsBtn").addEventListener("click",function(){ toggleFullscreen();
+    setTimeout(()=>this.classList.toggle("on", !!(document.fullscreenElement||document.webkitFullscreenElement)),100); });
 
   // ---------- 顶部开关 ----------
   function togglePause(){
@@ -604,11 +651,16 @@
   board=Array.from({length:ROWS},()=>Array(COLS).fill(null));
   voff=Array.from({length:ROWS},()=>new Float32Array(COLS));
   vscale=Array.from({length:ROWS},()=>{const a=new Float32Array(COLS); a.fill(1); return a;});
+  $("foot").textContent = isMobile
+    ? "点击=旋转 · 左右滑=移动 · 下滑=速降"
+    : "← → 移动 · ↑ 旋转 · ↓ 加速 · 空格 速降 · P 暂停";
   next=newPiece(); current=newPiece();
   resize(); showMenu(); requestAnimationFrame(loop);
 
   // ---------- PWA ----------
-  if("serviceWorker" in navigator){ window.addEventListener("load",()=>{ navigator.serviceWorker.register("./sw.js").catch(()=>{}); }); }
+  if("serviceWorker" in navigator && !/[?&]nosw=1/.test(location.search)){
+    window.addEventListener("load",()=>{ navigator.serviceWorker.register("./sw.js").catch(()=>{}); });
+  }
 })();
 </script>
 </body>
