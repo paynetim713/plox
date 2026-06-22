@@ -102,6 +102,17 @@
   kbd{background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.2);
     border-radius:5px; padding:1px 6px; font-size:11px; font-family:inherit;}
   .foot{margin-top:10px; color:var(--dim); font-size:10px; letter-spacing:.1em; opacity:.7;}
+  .link{margin-top:4px; color:var(--accent); font-size:12px; font-weight:700; cursor:pointer; text-decoration:underline; opacity:.9;}
+  .lb{width:100%; max-width:300px; margin:2px auto 4px; border-collapse:collapse; font-variant-numeric:tabular-nums;}
+  .lb td{padding:6px 8px; font-size:14px; border-bottom:1px solid rgba(150,90,255,.15);}
+  .lb .rk{color:var(--dim); width:38px; font-weight:800; text-align:center;}
+  .lb .nm{text-align:left; font-weight:700; color:var(--txt); max-width:120px; overflow:hidden; text-overflow:ellipsis;}
+  .lb .sc{text-align:right; font-weight:800; color:var(--accent);}
+  .lb tr.me td{color:#fff; background:rgba(255,61,245,.16);}
+  .lb tr.me .sc{color:#ffb0f4;}
+  .nameIn{padding:11px 14px; font-size:20px; font-weight:800; text-align:center; letter-spacing:.14em;
+    border-radius:12px; border:1px solid var(--accent2); background:rgba(20,8,45,.9); color:#fff;
+    width:210px; text-transform:uppercase; outline:none;}
   @media (max-width:430px){ .side{width:78px;} .title{font-size:26px;} .diff{padding:10px 12px; font-size:14px;} }
 </style>
 </head>
@@ -248,16 +259,63 @@
       '</div>'+
       '<p>电脑：<kbd>←</kbd><kbd>→</kbd>移动 · <kbd>↑</kbd>旋转 · <kbd>↓</kbd>加速 · <kbd>空格</kbd>速降<br>'+
       '手机：点击旋转 · 左右滑动 · 向下滑速降(或用下方按钮)</p>'+
-      '<button class="play" id="playBtn">开始游戏</button>';
+      '<button class="play" id="playBtn">开始游戏</button>'+
+      '<div class="link" id="lbLink">🏆 查看排行榜</div>';
     overlay.classList.remove("hidden");
     [...overlay.querySelectorAll(".diff")].forEach(b=>b.addEventListener("click",()=>{
       diffKey=b.dataset.k;
       [...overlay.querySelectorAll(".diff")].forEach(x=>x.classList.toggle("sel",x.dataset.k===diffKey));
     }));
     $("playBtn").addEventListener("click", start);
+    $("lbLink").addEventListener("click", ()=>showLeaderboard(-1));
   }
   const diffBtn=k=>'<div class="diff'+(k===diffKey?' sel':'')+'" data-k="'+k+'">'+DIFFS[k].label+
     '<small>'+DIFFS[k].colors+' 色</small></div>';
+
+  // ---------- 排行榜(本机持久化;留好接全局后端的接口)----------
+  const LB_KEY="plox_lb", NAME_KEY="plox_name", LB_MAX=10;
+  function getLB(){ try{ return JSON.parse(localStorage.getItem(LB_KEY))||[]; }catch(e){ return []; } }
+  function saveLB(a){ try{ localStorage.setItem(LB_KEY, JSON.stringify(a.slice(0,LB_MAX))); }catch(e){} }
+  function qualifies(s){ if(s<=0) return false; const lb=getLB(); return lb.length<LB_MAX || s>lb[lb.length-1].score; }
+  function escapeHtml(s){ return String(s).replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c])); }
+  function addToLB(name){
+    const lb=getLB();
+    const entry={name:(name||"YOU").slice(0,8).toUpperCase(), score:score, level:level, combo:maxCombo, diff:diffKey};
+    lb.push(entry); lb.sort((a,b)=>b.score-a.score);
+    const trimmed=lb.slice(0,LB_MAX); saveLB(trimmed);
+    return trimmed.indexOf(entry);
+  }
+  function lbTable(hi){
+    const lb=getLB();
+    if(!lb.length) return '<p>还没有记录,快来抢第一名!</p>';
+    const medal=['🥇','🥈','🥉'];
+    let h='<table class="lb">';
+    lb.forEach((e,i)=>{ h+='<tr class="'+(i===hi?'me':'')+'"><td class="rk">'+(medal[i]||(i+1))+
+      '</td><td class="nm">'+escapeHtml(e.name)+'</td><td class="sc">'+e.score+'</td></tr>'; });
+    return h+'</table>';
+  }
+  function showLeaderboard(hi){
+    state="menu"; stopMusic();
+    overlay.innerHTML='<h1>🏆 排行榜</h1>'+lbTable(hi==null?-1:hi)+
+      '<p style="font-size:11px">最高分排名(本设备)</p>'+
+      '<button class="play" id="lbBack">返回</button>';
+    overlay.classList.remove("hidden");
+    $("lbBack").addEventListener("click", showMenu);
+  }
+  function showNameEntry(){
+    state="menu"; stopMusic();
+    const last=localStorage.getItem(NAME_KEY)||"YOU";
+    overlay.innerHTML='<h1>新纪录!</h1>'+
+      '<p class="big">得分 <b style="color:#fff">'+score+'</b> · 登上排行榜</p>'+
+      '<input class="nameIn" id="nameIn" maxlength="8" value="'+escapeHtml(last)+'" autocomplete="off" />'+
+      '<button class="play" id="nameOk">保存</button>';
+    overlay.classList.remove("hidden");
+    const inp=$("nameIn"); setTimeout(()=>{ inp.focus(); inp.select(); },40);
+    const submit=()=>{ const nm=(inp.value.trim()||"YOU"); localStorage.setItem(NAME_KEY,nm.toUpperCase());
+      const idx=addToLB(nm); showLeaderboard(idx); };
+    $("nameOk").addEventListener("click", submit);
+    inp.addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); submit(); } });
+  }
 
   function start(){
     reset(); state="playing"; overlay.classList.add("hidden"); last=performance.now();
@@ -266,15 +324,18 @@
   function gameOver(){
     state="gameover"; stopMusic();
     if(score>high){ high=score; localStorage.setItem("plox_high",high); elHigh.textContent=high; }
+    beep(140,.25,"sawtooth",.15);
+    if(qualifies(score)){ showNameEntry(); return; }
     overlay.innerHTML='<h1>结束</h1>'+
       '<p class="big">本局得分 <b style="color:#fff">'+score+'</b></p>'+
       '<p>消除 '+cleared+' 个 · 最高连击 ×'+maxCombo+' · 等级 '+level+'<br>历史最高 '+high+'</p>'+
       '<button class="play" id="playBtn">再来一局</button>'+
+      '<div class="link" id="lbLink2">🏆 排行榜</div>'+
       '<div class="foot" id="backMenu" style="cursor:pointer;text-decoration:underline">选择难度</div>';
     overlay.classList.remove("hidden");
     $("playBtn").addEventListener("click", start);
+    $("lbLink2").addEventListener("click", ()=>showLeaderboard(-1));
     $("backMenu").addEventListener("click", showMenu);
-    beep(140,.25,"sawtooth",.15);
   }
 
   function stepDown(){ if(valid(current.row+1,current.col,current.colors)) current.row++; else lockPiece(); }
@@ -491,8 +552,9 @@
 
   // ---------- 键盘 ----------
   document.addEventListener("keydown",e=>{
+    if(e.target && (e.target.tagName==="INPUT"||e.target.isContentEditable)) return; // 不拦截输入框打字
     if(["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"," "].includes(e.key)) e.preventDefault();
-    if(state!=="playing"){ if((e.key===" "||e.key==="Enter")&&state!=="playing") start(); return; }
+    if(state!=="playing"){ if((e.key===" "||e.key==="Enter")&&(state==="gameover"||state==="start")) start(); return; }
     switch(e.key){
       case "ArrowLeft": move(-1); break;
       case "ArrowRight": move(1); break;
