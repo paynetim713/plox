@@ -193,14 +193,14 @@
     {fill:"#ff5a4d", glow:"#ff9d94"}, // 红
     {fill:"#b06cff", glow:"#d6b3ff"}, // 紫
   ];
-  // 难度 = 每个掉落方块的「格数」(简单3 / 普通4 / 困难5),速度统一不变
+  // 每组固定 3 个随机色块;难度 = 掉落速度(简单稍慢 / 普通正常 / 困难稍快)
   const FIXED_COLORS = 5;
-  const BASE_INTERVAL = 720;   // 统一下落速度
-  const SPEED_STEP = 45;       // 每升一级略微加速(与难度无关)
+  const PIECE_LEN = 3;         // 每组固定 3 个色块
+  const SPEED_STEP = 35;       // 每升一级略微加速(进度感,与难度无关)
   const DIFFS = {
-    easy:   {label:"简单", sub:"3 块", len:3},
-    normal: {label:"普通", sub:"4 块", len:4},
-    hard:   {label:"困难", sub:"5 块", len:5},
+    easy:   {label:"简单", sub:"稍慢", interval:900},
+    normal: {label:"普通", sub:"正常", interval:720},
+    hard:   {label:"困难", sub:"稍快", interval:560},
   };
   const CLEAR_MS = 240;
   const _ui = (location.search.match(/[?&]ui=(mobile|desktop)/)||[])[1];
@@ -277,7 +277,7 @@
     voff=Array.from({length:ROWS},()=>new Float32Array(COLS));
     vscale=Array.from({length:ROWS},()=>{const a=new Float32Array(COLS); a.fill(1); return a;});
     score=0; cleared=0; level=1; combo=0; maxCombo=0;
-    baseInterval=BASE_INTERVAL; colorCount=FIXED_COLORS; pieceLen=DIFFS[diffKey].len;
+    baseInterval=DIFFS[diffKey].interval; colorCount=FIXED_COLORS; pieceLen=PIECE_LEN;
     dropInterval=baseInterval; dropAccum=0; softDrop=false; clearing=null; sub="control";
     shakeT=0; particles.length=0; popups.length=0;
     next=newPiece(); spawn(); syncHUD();
