@@ -1,5 +1,8 @@
 # PLOX · 单机版
 
+🎮 **在线试玩:https://paynetim713.github.io/plox/**　(手机/电脑都能开,可"添加到主屏幕"当 App 用)
+📦 **源码仓库:https://github.com/paynetim713/plox**
+
 经典街机消除游戏 **Plox(Columns 玩法)** 的单人复刻版。
 竖排掉落 3 个随机颜色的方块,横 / 竖 / 斜任意方向凑齐 **3 个同色**即消除,可连锁得分,方块爆顶则游戏结束。
 
