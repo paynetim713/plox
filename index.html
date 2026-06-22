@@ -27,7 +27,8 @@
       radial-gradient(700px 500px at 100% 20%, #4a0a40 0%, transparent 55%),
       linear-gradient(160deg, var(--bg0), var(--bg1));
     display:flex; flex-direction:column; align-items:center;
-    justify-content:flex-start; padding:8px 10px env(safe-area-inset-bottom,8px);
+    justify-content:flex-start;
+    padding:calc(6px + env(safe-area-inset-top,0px)) 10px calc(6px + env(safe-area-inset-bottom,0px));
     user-select:none; -webkit-user-select:none; -webkit-touch-callout:none;
     touch-action:none; overscroll-behavior:none;
   }
@@ -229,13 +230,21 @@
 
   elHigh.textContent=high;
 
+  // 读取系统安全区(刘海/灵动岛/底部指示条)的实际像素
+  function envInset(side){
+    const p=document.createElement("div");
+    p.style.cssText="position:fixed;visibility:hidden;pointer-events:none;width:1px;"+side+":0;height:env(safe-area-inset-"+side+",0px);";
+    document.body.appendChild(p); const v=p.offsetHeight||0; p.remove(); return v;
+  }
+
   // ---------- 尺寸自适应 ----------
   function resize(){
     let availW, availH;
     if(isMobile){
-      // 无侧栏、无大按钮:棋盘尽量铺满
+      // 无侧栏、无大按钮:棋盘尽量铺满;扣掉刘海+底部安全区,避免全屏 App 模式被裁切
+      const sTop=envInset("top"), sBot=envInset("bottom");
       availW = Math.min(window.innerWidth - 12, 560);
-      availH = window.innerHeight - 168;           // 预留:标题+开关+分数条+提示
+      availH = window.innerHeight - 170 - sTop - sBot;   // 预留:标题+开关+分数条+提示+安全区
     }else{
       const sideW = window.innerWidth<430 ? 78 : 96;
       availW = Math.min(520, window.innerWidth-20) - sideW - 10;
