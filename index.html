@@ -70,18 +70,18 @@
   .card .v{font-size:18px; font-weight:800; text-align:center; font-variant-numeric:tabular-nums;}
 
   .foot{margin-top:10px; color:var(--dim); font-size:11px; letter-spacing:.06em; opacity:.75; text-align:center;}
-  /* ---- 移动端(触屏):去掉侧栏、放大棋盘、纯手势操作 ---- */
-  body.mobile header{margin:0 0 4px;}
-  body.mobile .sub{display:none;}
-  body.mobile .title{font-size:22px;}
+  /* ---- 移动端(触屏):去掉侧栏/大标题/大按钮,棋盘尽量铺满,纯手势操作 ---- */
+  body.mobile header{display:none;}              /* 隐藏大标题(菜单里已有),把空间让给棋盘 */
+  body.mobile .toprow{margin-bottom:6px; gap:5px;}
   body.mobile .side{display:none;}
   body.mobile .hud{margin-bottom:6px;}
-  body.mobile .stat{padding:5px 4px;}
-  body.mobile .stat .v{font-size:17px;}
-  body.mobile .mini .lab{display:none;}
-  body.mobile .mini{padding:8px 2px;}
-  body.mobile .mini .ic{font-size:17px;}
-  body.mobile .foot{margin-top:6px; font-size:11px;}
+  body.mobile .stat{padding:4px 4px;}
+  body.mobile .stat .k{font-size:9px;}
+  body.mobile .stat .v{font-size:16px;}
+  body.mobile .mini .lab{display:none;}          /* 只留图标,按钮变小 */
+  body.mobile .mini{padding:5px 2px;}
+  body.mobile .mini .ic{font-size:15px;}
+  body.mobile .foot{margin-top:5px; font-size:11px;}
   /* ---- 桌面端:用键盘,隐藏手势提示 ---- */
   body.desktop .foot{font-size:10px; letter-spacing:.1em; opacity:.7;}
   /* ---- iPhone「添加到主屏幕」引导 ---- */
@@ -230,21 +230,18 @@
 
   elHigh.textContent=high;
 
-  // 读取系统安全区(刘海/灵动岛/底部指示条)的实际像素
-  function envInset(side){
-    const p=document.createElement("div");
-    p.style.cssText="position:fixed;visibility:hidden;pointer-events:none;width:1px;"+side+":0;height:env(safe-area-inset-"+side+",0px);";
-    document.body.appendChild(p); const v=p.offsetHeight||0; p.remove(); return v;
-  }
-
   // ---------- 尺寸自适应 ----------
   function resize(){
     let availW, availH;
     if(isMobile){
-      // 无侧栏、无大按钮:棋盘尽量铺满;扣掉刘海+底部安全区,避免全屏 App 模式被裁切
-      const sTop=envInset("top"), sBot=envInset("bottom");
+      // 直接量真实布局:棋盘上沿到底部安全区之间的剩余空间,全屏 App 也不会被裁切
+      const stage=document.querySelector(".stage");
+      const stageTop=stage.getBoundingClientRect().top;                       // 上方所有 UI(含刘海安全区)的真实高度
+      const padBottom=parseFloat(getComputedStyle(document.body).paddingBottom)||8; // 底部指示条安全区(浏览器已算好)
+      const footEl=document.getElementById("foot");
+      const footH=footEl?footEl.getBoundingClientRect().height:16;
       availW = Math.min(window.innerWidth - 12, 560);
-      availH = window.innerHeight - 170 - sTop - sBot;   // 预留:标题+开关+分数条+提示+安全区
+      availH = window.innerHeight - stageTop - padBottom - footH - 12;        // 12:余量
     }else{
       const sideW = window.innerWidth<430 ? 78 : 96;
       availW = Math.min(520, window.innerWidth-20) - sideW - 10;
@@ -259,6 +256,9 @@
     render();
   }
   window.addEventListener("resize", resize);
+  window.addEventListener("orientationchange", ()=>setTimeout(resize,150));
+  // 全屏 App 启动时布局/安全区可能晚一拍到位,补量几次
+  window.addEventListener("load", ()=>{ resize(); setTimeout(resize,300); });
 
   // ---------- 工具 ----------
   const rc=()=>(Math.random()*colorCount)|0;
@@ -483,9 +483,11 @@
     const cx=(colF+0.5)*cell, cy=(rowF+0.5)*cell, x=cx-s/2, y=cy-s/2;
     const col=COLORS[idx]||COLORS[0];
     g.save();
-    if(opt.ghost){ // 实心半透明落点(看得出颜色)
-      g.globalAlpha=.34; g.fillStyle=col.fill; rr(g,x,y,s,s,cell*0.18); g.fill();
-      g.globalAlpha=.85; g.strokeStyle=col.glow; g.lineWidth=Math.max(1.5,cell*0.05);
+    if(opt.ghost){ // 半透明落点:用方块本色的渐变,清晰看得出颜色
+      const gg=g.createLinearGradient(x,y,x,y+s);
+      gg.addColorStop(0,col.glow); gg.addColorStop(1,col.fill);
+      g.globalAlpha=.55; g.fillStyle=gg; rr(g,x,y,s,s,cell*0.18); g.fill();
+      g.globalAlpha=1; g.strokeStyle=col.glow; g.lineWidth=Math.max(2,cell*0.08);
       rr(g,x,y,s,s,cell*0.18); g.stroke(); g.restore(); return; }
     g.shadowColor=col.glow; g.shadowBlur=cell*0.45*(opt.glow||1);
     const grad=g.createLinearGradient(x,y,x,y+s);
