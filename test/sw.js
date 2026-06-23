@@ -1,7 +1,7 @@
 // PLOX service worker — 网络优先,离线回退(保证更新能及时推送给玩家)
 const CACHE = "plox-v5";
 const ASSETS = ["./", "./index.html", "./manifest.json", "./icon.svg",
-  "./css/styles.css", "./js/main.js", "./js/config.js"];
+  "./css/styles.css", "./js/main.js", "./js/config.js", "./js/economy.js", "./js/items.js"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));

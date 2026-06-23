@@ -1,5 +1,7 @@
 import { COLS, ROWS, COLORS, FIXED_COLORS, PIECE_LEN, PLAYER_INTERVAL, JUNK_FALL,
          ROT_MS, PRAISE, PRAISE_COL, DIFFS, CLEAR_MS, stageGoal } from "./config.js";
+import { getCoins, addCoins, spendCoins } from "./economy.js";
+import { ITEMS, ITEM_LIST, getItem, addItem, useItem, ownedItems } from "./items.js";
 
 (() => {
   "use strict";
@@ -16,6 +18,22 @@ import { COLS, ROWS, COLORS, FIXED_COLORS, PIECE_LEN, PLAYER_INTERVAL, JUNK_FALL
   const $=id=>document.getElementById(id);
   const elScore=$("score"), elHigh=$("high"), elLevel=$("level"),
         elCleared=$("cleared"), elMaxCombo=$("maxcombo"), overlay=$("overlay");
+  const elCoins=$("coins"), elItembar=$("itembar");
+
+  // ---------- 金币 + 道具 UI ----------
+  function syncCoins(){ if(elCoins) elCoins.textContent="🪙 "+getCoins(); }
+  syncCoins();
+  // 局内道具栏:只列出已拥有的道具,点一下用一个
+  function renderItemBar(){
+    if(!elItembar) return;
+    const owned=ownedItems();
+    elItembar.innerHTML = owned.map(id=>{
+      const it=ITEMS[id];
+      return '<button class="itembtn" data-id="'+id+'" title="'+it.desc+'">'+it.icon+'<span class="n">'+getItem(id)+'</span></button>';
+    }).join("");
+    [...elItembar.querySelectorAll(".itembtn")].forEach(b=>
+      b.addEventListener("click", ()=>useBomb(b.dataset.id)));
+  }
 
   // ---------- 状态 ----------
   let board, voff, vscale, vmode, current, next, state="start", sub="control";
@@ -120,15 +138,46 @@ import { COLS, ROWS, COLORS, FIXED_COLORS, PIECE_LEN, PLAYER_INTERVAL, JUNK_FALL
         '<div class="segHint" id="segHint">'+DIFFS[diffKey].sub+'</div>'+
       '</div>'+
       '<button class="play" id="playBtn">开 始</button>'+
+      '<div class="link" id="shopLink">🛒 商店</div>'+
       '<div class="link" id="lbLink">排行榜</div>';
     overlay.classList.remove("hidden");
+    syncCoins();
     [...overlay.querySelectorAll(".seg b")].forEach(b=>b.addEventListener("click",()=>{
       diffKey=b.dataset.k;
       [...overlay.querySelectorAll(".seg b")].forEach(x=>x.classList.toggle("on",x.dataset.k===diffKey));
       $("segHint").textContent=DIFFS[diffKey].sub; refreshHigh();
     }));
     $("playBtn").addEventListener("click", start);
+    $("shopLink").addEventListener("click", ()=>showShop());
     $("lbLink").addEventListener("click", ()=>showLeaderboard());
+  }
+  // ---------- 商店:金币购买道具 ----------
+  function showShop(){
+    state="start";
+    const rows = ITEM_LIST.map(id=>{
+      const it=ITEMS[id], own=getItem(id);
+      return '<div class="shopRow"><div class="ic">'+it.icon+'</div>'+
+        '<div class="meta"><div class="nm">'+it.name+'</div><div class="ds">'+it.desc+'</div>'+
+        '<div class="own">已拥有 '+own+'</div></div>'+
+        '<button class="buyBtn" data-id="'+id+'">🪙 '+it.cost+'</button></div>';
+    }).join("");
+    overlay.innerHTML =
+      '<h1 style="font-size:26px">商店</h1>'+
+      '<div class="coins" style="font-size:15px">🪙 '+getCoins()+'</div>'+
+      '<div class="shopList">'+rows+'</div>'+
+      '<p style="margin-top:4px">过关可赚金币 · 新玩家已赠 10 🪙</p>'+
+      '<div class="link" id="shopBack">← 返回</div>';
+    overlay.classList.remove("hidden");
+    const refresh=()=>{ showShop(); };   // 买完重画(刷新金币/拥有数/按钮可用)
+    [...overlay.querySelectorAll(".buyBtn")].forEach(b=>{
+      const it=ITEMS[b.dataset.id];
+      if(getCoins() < it.cost) b.disabled=true;
+      b.addEventListener("click", ()=>{
+        if(spendCoins(it.cost)){ addItem(it.id,1); beep(880,.08,"triangle",.08); beep(1320,.07,"sine",.05);
+          syncCoins(); renderItemBar(); refresh(); }
+      });
+    });
+    $("shopBack").addEventListener("click", ()=>showMenu());
   }
   const segBtn=k=>'<b class="'+(k===diffKey?'on':'')+'" data-k="'+k+'">'+DIFFS[k].label+'</b>';
 
@@ -253,6 +302,7 @@ import { COLS, ROWS, COLORS, FIXED_COLORS, PIECE_LEN, PLAYER_INTERVAL, JUNK_FALL
 
   function start(){
     reset(); state="playing"; overlay.classList.add("hidden"); last=performance.now();
+    syncCoins(); renderItemBar();   // 进入游戏:显示金币 + 已拥有道具按钮
     ensureAudio(); startMusic(); beep(660,.08,"sine",.1);
   }
   function gameOver(){
@@ -263,7 +313,7 @@ import { COLS, ROWS, COLORS, FIXED_COLORS, PIECE_LEN, PLAYER_INTERVAL, JUNK_FALL
     if(isRecord){ showNameEntry(); return; }
     overlay.innerHTML='<h1>结束</h1>'+
       '<p class="big">本局得分 <b style="color:#fff">'+score+'</b></p>'+
-      '<p>消除 '+cleared+' 个 · 最高连击 ×'+maxCombo+' · 等级 '+level+'<br>历史最高 '+high+'</p>'+
+      '<p>消除 '+cleared+' 个 · 最高连击 ×'+maxCombo+' · 关卡 '+level+'<br>历史最高 '+high+'</p>'+
       '<button class="play" id="playBtn">再来一局</button>'+
       '<div class="link" id="lbLink2">🏆 排行榜</div>'+
       '<div class="foot" id="backMenu" style="cursor:pointer;text-decoration:underline">选择难度</div>';
@@ -316,11 +366,13 @@ import { COLS, ROWS, COLORS, FIXED_COLORS, PIECE_LEN, PLAYER_INTERVAL, JUNK_FALL
     const bonus = m.size>3 ? (m.size-3)*15 : 0;
     const gained = m.size*10*combo + bonus*combo;
     score+=gained; cleared+=m.size;
-    // 关卡:本关消除够目标 → 过关,乱入更频繁、越来越难
+    // 关卡:本关消除够目标 → 过关,乱入更频繁、越来越难,并奖励金币
     if(cleared-stageStart >= stageGoal(level)){
       stageStart=cleared; level++;
       junkMin=Math.max(1, junkMin-1); junkMax=Math.max(2, junkMax-1);   // 每关乱入更勤
-      spawnStageBanner(level);
+      const reward=1+Math.floor(level/4);   // 过关奖励金币(随关卡略增)
+      addCoins(reward); syncCoins();
+      spawnStageBanner(level, reward);
     }
     clearing=m; clearTimer=CLEAR_MS; flashPulse=0;
     shakeT=Math.min(220, 60+m.size*14+combo*20);   // 震动减弱
@@ -371,6 +423,24 @@ import { COLS, ROWS, COLORS, FIXED_COLORS, PIECE_LEN, PLAYER_INTERVAL, JUNK_FALL
       shakeT=Math.min(180,60+total*16); beep(520,.1,"triangle",.1); }
   }
 
+  // ---------- 道具:炸弹(炸掉最下方 N 行)----------
+  function useBomb(id){
+    const it=ITEMS[id]; if(!it) return;
+    if(state!=="playing" || sub!=="control") return;   // 只在可操作时使用,避免与消除动画/暂停冲突
+    if(!useItem(id)) return;                            // 扣库存(无则不触发)
+    let n=0;
+    for(let r=ROWS-1; r>=Math.max(0,ROWS-it.rows); r--){
+      for(let c=0;c<COLS;c++){ if(board[r][c]!=null){
+        spawnParticles(c,r,board[r][c]); board[r][c]=null; voff[r][c]=0; vmode[r][c]=0; vscale[r][c]=1; n++; } }
+    }
+    gravity();
+    score+=n*5; syncHUD();
+    shakeT=Math.min(260,160+n*6); freezeT=Math.min(90,50);
+    beep(70,.22,"sawtooth",.13); beep(150,.16,"square",.1); beep(40,.3,"triangle",.1);
+    resolveJunk();        // 炸后塌落可能形成的新消除一并结算
+    renderItemBar();      // 刷新数量(可能归零 → 按钮消失)
+  }
+
   // ---------- 操作 ----------
   const playing=()=>state==="playing"&&sub==="control";
   function move(d){ if(playing()&&valid(current.row,current.col+d,current.colors)){ current.col+=d; beep(330,.03,"sine",.05);} }
@@ -397,10 +467,10 @@ import { COLS, ROWS, COLORS, FIXED_COLORS, PIECE_LEN, PLAYER_INTERVAL, JUNK_FALL
       word:PRAISE[tier], col:PRAISE_COL[tier], sub:"+"+gained});
   }
   // 过关横幅:醒目、停留久一点
-  function spawnStageBanner(stage){
+  function spawnStageBanner(stage, reward){
     popups.length=0;
     popups.push({x:COLS*CELL/2, y:ROWS*CELL*0.32, life:1.6, age:0, tier:4, banner:true,
-      word:"第 "+stage+" 关", col:"#ffd86a", sub:"加油!"});
+      word:"第 "+stage+" 关", col:"#ffd86a", sub: reward?("🪙 +"+reward):"加油!"});
     beep(660,.14,"triangle",.12); beep(990,.13,"sine",.09); beep(1320,.12,"sine",.06);
     shakeT=Math.min(200,150); freezeT=Math.min(90,70);
     syncHUD();
@@ -599,17 +669,26 @@ import { COLS, ROWS, COLORS, FIXED_COLORS, PIECE_LEN, PLAYER_INTERVAL, JUNK_FALL
     }catch(e){} }
   function beep(f,d,t,v){ if(soundOn){ ensureAudio(); tone(f,d,t,v); } }
 
-  // 背景音乐:小调五声音阶琶音 + 低音
+  // 背景音乐:多首生成式电子乐,玩家可在设置里切换
   let musicTimer=null, musicStep=0;
-  const SCALE=[0,3,5,7,10,12,15], PAT=[0,2,1,3,2,4,3,5,4,2,1,3];
   const nf=s=>220*Math.pow(2,s/12);
+  const TRACKS=[
+    { name:"霓虹", scale:[0,3,5,7,10,12,15],   pat:[0,2,1,3,2,4,3,5,4,2,1,3], tempo:195, lead:"triangle", lv:0.045, bassEvery:4, bass2Every:8 },
+    { name:"律动", scale:[0,2,3,5,7,8,10,12],  pat:[0,4,2,5,3,6,4,7,5,3,1,4], tempo:165, lead:"square",   lv:0.030, bassEvery:2, bass2Every:6 },
+    { name:"梦境", scale:[0,2,4,7,9,11,12,14], pat:[0,2,4,3,5,4,6,5,2,4,1,3], tempo:240, lead:"sine",     lv:0.052, bassEvery:4, bass2Every:8 },
+    { name:"脉冲", scale:[0,3,5,6,7,10,12,15], pat:[0,1,2,3,4,5,4,3,2,5,3,1], tempo:150, lead:"sawtooth", lv:0.024, bassEvery:2, bass2Every:4 },
+  ];
+  let musicTrack=(()=>{ try{ const v=parseInt(localStorage.getItem("plox_music")||"0",10); return (v>=0&&v<TRACKS.length)?v:0; }catch(e){ return 0; } })();
+  function setMusicTrack(i){ musicTrack=((i%TRACKS.length)+TRACKS.length)%TRACKS.length;
+    try{ localStorage.setItem("plox_music",String(musicTrack)); }catch(e){} }
   function musicTick(){
     if(!musicOn||state!=="playing"||!actx||actx.state!=="running"){ musicTimer=null; return; }
-    const idx=PAT[musicStep%PAT.length];
-    tone(nf(SCALE[idx]),0.26,"triangle",0.045,0.02);
-    if(musicStep%4===0) tone(nf(SCALE[0])/2,0.34,"sine",0.05,0.02);
-    if(musicStep%8===4) tone(nf(SCALE[2]),0.22,"sine",0.03,0.02);
-    musicStep++; musicTimer=setTimeout(musicTick,195);
+    const tk=TRACKS[musicTrack]||TRACKS[0], sc=tk.scale;
+    const idx=tk.pat[musicStep%tk.pat.length] % sc.length;
+    tone(nf(sc[idx]),0.26,tk.lead,tk.lv,0.02);
+    if(musicStep%tk.bassEvery===0) tone(nf(sc[0])/2,0.34,"sine",0.05,0.02);
+    if(musicStep%tk.bass2Every===(tk.bass2Every>>1)) tone(nf(sc[Math.min(2,sc.length-1)]),0.22,"sine",0.03,0.02);
+    musicStep++; musicTimer=setTimeout(musicTick,tk.tempo);
   }
   function startMusic(){ if(!musicTimer&&musicOn&&state==="playing"){ ensureAudio(); musicTick(); } }
   function stopMusic(){ if(musicTimer){ clearTimeout(musicTimer); musicTimer=null; } }
@@ -723,9 +802,13 @@ import { COLS, ROWS, COLORS, FIXED_COLORS, PIECE_LEN, PLAYER_INTERVAL, JUNK_FALL
   }
   function sheetHTML(){
     const sw=(on,label,k)=>'<button class="srow" data-tog="'+k+'"><span>'+label+'</span><span class="sw'+(on?' on':'')+'">'+(on?'开':'关')+'</span></button>';
+    const tracks = musicOn
+      ? '<div class="trackSel">'+TRACKS.map((t,i)=>'<b class="'+(i===musicTrack?'on':'')+'" data-track="'+i+'">'+t.name+'</b>').join('')+'</div>'
+      : '';
     return '<div class="scard"><h3>设置</h3>'+
       sw(ghostOn,'落点预览','ghost')+
       sw(musicOn,'背景音乐','music')+
+      tracks+
       sw(soundOn,'音效','sound')+
       fsRowHTML()+
       '<div class="ssplit"></div>'+
@@ -750,8 +833,11 @@ import { COLS, ROWS, COLORS, FIXED_COLORS, PIECE_LEN, PLAYER_INTERVAL, JUNK_FALL
   }
   function onSheetClick(e){
     if(e.target===$("sheet")){ closeSettings(true); return; }
-    const row=e.target.closest("[data-tog],[data-act]"); if(!row) return;
+    const row=e.target.closest("[data-tog],[data-act],[data-track]"); if(!row) return;
     const tog=row.dataset.tog, act=row.dataset.act;
+    if(row.dataset.track!=null){ setMusicTrack(+row.dataset.track);   // 切歌:立刻换上,正在玩则重启播放
+      if(state==="playing"||settingsResume){ stopMusic(); musicStep=0; if(settingsResume){/*暂停中,继续时会自动播*/} else startMusic(); }
+      beep(700,.05,"triangle",.06); renderSheet(); return; }
     if(tog==="ghost"){ ghostOn=!ghostOn; renderSheet(); }
     else if(tog==="music"){ musicOn=!musicOn; renderSheet(); }
     else if(tog==="sound"){ soundOn=!soundOn; if(soundOn) beep(660,.08,"sine",.1); renderSheet(); }
@@ -784,7 +870,10 @@ import { COLS, ROWS, COLORS, FIXED_COLORS, PIECE_LEN, PLAYER_INTERVAL, JUNK_FALL
       forceJunk:()=>dropJunk(),
       falling:()=>fallingJunk.map(j=>({c:j.c,y:Math.round(j.y*100)/100})),
       tick:(ms)=>updateFx(ms||16),
-      clearN:(n)=>{ cleared+=(n||stageGoal(level)); if(cleared-stageStart>=stageGoal(level)){ stageStart=cleared; level++; junkMin=Math.max(1,junkMin-1); junkMax=Math.max(2,junkMax-1); spawnStageBanner(level); } syncHUD(); }
+      clearN:(n)=>{ cleared+=(n||stageGoal(level)); if(cleared-stageStart>=stageGoal(level)){ stageStart=cleared; level++; junkMin=Math.max(1,junkMin-1); junkMax=Math.max(2,junkMax-1); const rw=1+Math.floor(level/4); addCoins(rw); syncCoins(); spawnStageBanner(level,rw); } syncHUD(); },
+      coins:()=>getCoins(), give:(n)=>{ addCoins(n||5); syncCoins(); return getCoins(); },
+      grant:(id,n)=>{ addItem(id||"bomb3",n||1); renderItemBar(); return getItem(id||"bomb3"); },
+      bomb:(id)=>useBomb(id||"bomb3"), inv:()=>ownedItems().map(id=>({id,n:getItem(id)}))
     };
   }
 
