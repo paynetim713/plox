@@ -291,7 +291,7 @@
     cv.width=COLS*CELL*dpr; cv.height=ROWS*CELL*dpr;
     cv.style.width=COLS*CELL+"px"; cv.style.height=ROWS*CELL+"px";
     ctx.setTransform(dpr,0,0,dpr,0,0);
-    if(next) drawNext();   // 「下一个」预览按当前块数自适应
+    if(next && !isMobile) drawNext();   // 「下一个」预览按当前块数自适应(移动端用画布内预览)
     render();
   }
   window.addEventListener("resize", resize);
@@ -331,7 +331,7 @@
     current.row=0; current.col=(COLS/2)|0;
     visRow=0; visCol=current.col; dropAccum=0;   // 复位累计,避免新方块"半格弹出"/首步过早
     if(!valid(current.row,current.col,current.colors)){ gameOver(); return; }
-    drawNext();
+    if(!isMobile) drawNext();
   }
   function showMenu(){
     state="start"; refreshHigh();
@@ -396,7 +396,8 @@
     for(let attempt=0; attempt<3; attempt++){   // 开放后端可能被并发覆盖 → 校验+重试自愈
       try{
         const cur=await fetchGlobal();
-        const list=sanitize((cur||[]).concat([entry]));
+        if(cur===null) continue;   // 读取失败:重试,绝不用空列表 PUT 覆盖掉整个全球榜
+        const list=sanitize(cur.concat([entry]));
         const hit=e=>e.name===entry.name && e.score===entry.score && e.diff===entry.diff;
         const made=list.some(hit);
         const r=await fetch(GLB_URL,{method:"PUT",headers:{"Content-Type":"application/json"},
@@ -458,7 +459,8 @@
     const submit=async()=>{
       if(submitting) return; submitting=true;
       const raw=(inp.value.trim()||"YOU"); const nm=raw.toUpperCase().slice(0,10);
-      localStorage.setItem(NAME_KEY,nm); addToLB(raw);
+      try{ localStorage.setItem(NAME_KEY,nm); }catch(e){}   // Safari 隐私模式/配额满也不卡住上传
+      addToLB(raw);
       overlay.innerHTML='<h1>上传中…</h1><p style="font-size:12px;color:var(--dim)">正在提交到全球排行榜</p>';
       await submitGlobal({name:nm, score:snapScore, diff:snapDiff});
       showLeaderboard(snapDiff, nm, snapScore);
@@ -517,7 +519,7 @@
       for(let r=ROWS-1;r>=0;r--){
         if(board[r][c]!=null){
           if(w!==r){ board[w][c]=board[r][c]; board[r][c]=null;
-            voff[w][c]=r-w; vmode[w][c]=0; vscale[w][c]=vscale[r][c]; voff[r][c]=0; vmode[r][c]=0; vscale[r][c]=1; }
+            voff[w][c]=(r-w)+voff[r][c]; vmode[w][c]=vmode[r][c]; vscale[w][c]=vscale[r][c]; voff[r][c]=0; vmode[r][c]=0; vscale[r][c]=1; }
           w--;
         }
       }
@@ -671,16 +673,17 @@
       const key=r+","+c, ry=r+voff[r][c];
       if(clearing&&clearing.has(key)){
         const pulse=0.5+0.5*Math.sin(flashPulse*0.03);
-        drawBlock(ctx,c,r,board[r][c],{glow:1.9, alpha:0.3+0.7*pulse, scale:1+pulse*0.12});
+        drawBlock(ctx,c,ry,board[r][c],{glow:1.9, alpha:0.3+0.7*pulse, scale:1+pulse*0.12});
         ctx.save(); ctx.globalAlpha=pulse*0.9; ctx.fillStyle="#fff";
-        const p=Math.max(2,CELL*0.07); rr(ctx,c*CELL+p,r*CELL+p,CELL-p*2,CELL-p*2,CELL*0.18); ctx.fill(); ctx.restore();
+        const p=Math.max(2,CELL*0.07); rr(ctx,c*CELL+p,ry*CELL+p,CELL-p*2,CELL-p*2,CELL*0.18); ctx.fill(); ctx.restore();
       } else drawBlock(ctx,c,ry,board[r][c],{scale:vscale[r][c]});
     }
 
     if(state==="playing"&&current&&sub==="control"){
       // visRow/visCol 由 updateFx 连续插值,这里只负责画
-      if(ghostOn){ const gr=ghostRow(); for(let i=0;i<current.colors.length;i++){ const r=gr+i; if(r>=0) drawBlock(ctx,current.col,r,current.colors[i],{ghost:true}); } }
       const n=current.colors.length;
+      // 落点只画在活动方块下方,避免最后一格与活动块重叠露出暗边
+      if(ghostOn){ const gr=ghostRow(); for(let i=0;i<n;i++){ const r=gr+i; if(r>=0 && r>visRow+n-1) drawBlock(ctx,current.col,r,current.colors[i],{ghost:true}); } }
       if(rotT>0){   // 旋转:整组干净"弹一下"(放大回弹),不滑动、不重影
         const t=1-rotT/ROT_MS, pop=1+0.15*Math.sin(t*Math.PI);
         const cx=(visCol+0.5)*CELL, cyc=(visRow+n/2)*CELL;
@@ -772,7 +775,7 @@
   const SCALE=[0,3,5,7,10,12,15], PAT=[0,2,1,3,2,4,3,5,4,2,1,3];
   const nf=s=>220*Math.pow(2,s/12);
   function musicTick(){
-    if(!musicOn||state!=="playing"||!actx){ musicTimer=null; return; }
+    if(!musicOn||state!=="playing"||!actx||actx.state!=="running"){ musicTimer=null; return; }
     const idx=PAT[musicStep%PAT.length];
     tone(nf(SCALE[idx]),0.26,"triangle",0.045,0.02);
     if(musicStep%4===0) tone(nf(SCALE[0])/2,0.34,"sine",0.05,0.02);
@@ -781,6 +784,12 @@
   }
   function startMusic(){ if(!musicTimer&&musicOn&&state==="playing"){ ensureAudio(); musicTick(); } }
   function stopMusic(){ if(musicTimer){ clearTimeout(musicTimer); musicTimer=null; } }
+  // 切后台/锁屏:停音乐;回到前台再恢复(否则 iOS 上 AudioContext 被挂起,音乐会哑/糊)
+  document.addEventListener("visibilitychange",()=>{
+    if(document.hidden){ stopMusic(); softDrop=false; }
+    else if(state==="playing"){ ensureAudio(); startMusic(); }
+  });
+  window.addEventListener("blur",()=>{ softDrop=false; });
 
   // ---------- 键盘 ----------
   document.addEventListener("keydown",e=>{
@@ -809,14 +818,14 @@
 
   // ---------- 触摸操作:点=旋转,左右滑=移动,下滑=速降 ----------
   let tS=null;
-  cv.addEventListener("touchstart",e=>{ e.preventDefault(); const t=e.touches[0];
+  cv.addEventListener("touchstart",e=>{ e.preventDefault(); if(e.touches.length>1) return; ensureAudio(); const t=e.touches[0];
     tS={x:t.clientX,y:t.clientY,t:performance.now(),moved:0,lastX:t.clientX}; },{passive:false});
-  cv.addEventListener("touchmove",e=>{ e.preventDefault(); if(!tS||!playing())return;
+  cv.addEventListener("touchmove",e=>{ e.preventDefault(); if(!tS||e.touches.length>1||!playing())return;
     const t=e.touches[0]; const dx=t.clientX-tS.lastX;
     if(Math.abs(dx)>=CELL*0.75){ move(dx>0?1:-1); tS.lastX=t.clientX; tS.moved+=Math.abs(dx); } },{passive:false});
   cv.addEventListener("touchend",e=>{ e.preventDefault(); if(!tS)return; const t=e.changedTouches[0];
     const dx=t.clientX-tS.x, dy=t.clientY-tS.y, dt=performance.now()-tS.t;
-    if(dy>CELL*1.5&&Math.abs(dy)>Math.abs(dx)) hardDrop();
+    if(dy>CELL*1.8 && dy>Math.abs(dx)*1.6 && dt<320) hardDrop();   // 需明确"向下甩"才速降,避免误触
     else if(tS.moved<CELL*0.5&&Math.abs(dx)<16&&Math.abs(dy)<16&&dt<280) rotate();
     tS=null; },{passive:false});
 
@@ -863,13 +872,13 @@
 
   // iPhone Safari 首次自动提示一次「添加到主屏幕」
   if(isIOS && !isStandalone && !localStorage.getItem("plox_a2hs")){
-    setTimeout(()=>{ showA2HS(); localStorage.setItem("plox_a2hs","1"); }, 1000);
+    setTimeout(()=>{ showA2HS(); try{ localStorage.setItem("plox_a2hs","1"); }catch(e){} }, 1000);
   }
   if(/[?&]a2hs=1/.test(location.search)) setTimeout(showA2HS, 300);  // 预览引导用
 
   // ---------- 暂停(键盘 P / 设置内继续)----------
   function togglePause(){
-    if(state==="playing"){ state="paused"; stopMusic();
+    if(state==="playing"){ state="paused"; softDrop=false; stopMusic();
       overlay.innerHTML='<h1>暂停</h1><button class="play" id="playBtn">继续</button>';
       overlay.classList.remove("hidden");
       $("playBtn").addEventListener("click",()=>{ state="playing"; overlay.classList.add("hidden"); last=performance.now(); startMusic(); });
@@ -899,7 +908,7 @@
   function renderSheet(){ const s=$("sheet"); if(s) s.innerHTML=sheetHTML(); }
   function openSettings(){
     settingsResume=(state==="playing");
-    if(settingsResume){ state="paused"; stopMusic(); }
+    if(settingsResume){ state="paused"; softDrop=false; stopMusic(); }
     let s=$("sheet");
     if(!s){ s=document.createElement("div"); s.id="sheet"; s.className="sheet";
       document.body.appendChild(s); s.addEventListener("click", onSheetClick); }
