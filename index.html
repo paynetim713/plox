@@ -153,6 +153,10 @@
     border-radius:5px; padding:1px 6px; font-size:11px; font-family:inherit;}
   .link{margin-top:14px; color:var(--dim); font-size:12px; letter-spacing:.18em; cursor:pointer; transition:color .15s;}
   .link:hover{color:var(--accent);}
+  .lbtabs{display:inline-flex; gap:2px; padding:3px; border-radius:12px; margin:0 auto 2px;
+    background:rgba(150,90,255,.08); border:1px solid rgba(150,90,255,.18);}
+  .lbtabs b{font-size:13px; font-weight:700; padding:6px 15px; border-radius:9px; cursor:pointer; color:var(--dim); transition:.15s;}
+  .lbtabs b.on{color:#10001f; background:linear-gradient(90deg,var(--accent2),var(--accent));}
   .lb{width:100%; max-width:300px; margin:2px auto 4px; border-collapse:collapse; font-variant-numeric:tabular-nums;}
   .lb td{padding:6px 8px; font-size:14px; border-bottom:1px solid rgba(150,90,255,.15);}
   .lb .rk{color:var(--dim); width:38px; font-weight:800; text-align:center;}
@@ -242,13 +246,17 @@
   let junkMin=3, junkMax=4, pieceUntilJunk=4, justJunked=false;   // 难度:随机乱入方块组
   let clearing=null, clearTimer=0, flashPulse=0;
   let visRow=0, visCol=3, shakeT=0;
-  let high=+(localStorage.getItem("plox_high")||0);
+  let high=0;   // 当前难度的个人最高分(各难度分开记)
   let ghostOn=true, soundOn=true, musicOn=true;
   let diffKey="normal";
   let CELL=44, dpr=1;
   const particles=[], popups=[];
 
-  elHigh.textContent=high;
+  // 个人最高分:按难度分别保存
+  function getBest(d){ try{ return +((JSON.parse(localStorage.getItem("plox_best"))||{})[d]||0); }catch(e){ return 0; } }
+  function setBest(d,s){ try{ const b=JSON.parse(localStorage.getItem("plox_best"))||{}; b[d]=s; localStorage.setItem("plox_best",JSON.stringify(b)); }catch(e){} }
+  function refreshHigh(){ high=getBest(diffKey); elHigh.textContent=high; }
+  refreshHigh();
 
   // ---------- 尺寸自适应 ----------
   function resize(){
@@ -304,6 +312,7 @@
     pieceUntilJunk=randInt(junkMin,junkMax); justJunked=false;
     dropInterval=baseInterval; dropAccum=0; softDrop=false; clearing=null; sub="control";
     shakeT=0; particles.length=0; popups.length=0;
+    refreshHigh();   // HUD「最高」显示当前难度的个人最高
     next=newPiece(); spawn(); syncHUD();
   }
   function spawn(){
@@ -314,7 +323,7 @@
     drawNext();
   }
   function showMenu(){
-    state="start";
+    state="start"; refreshHigh();
     overlay.innerHTML =
       '<div class="logoWrap"><div class="logo">PLOX</div><div class="logoSub">霓 虹 消 除</div></div>'+
       '<div class="segWrap">'+
@@ -327,7 +336,7 @@
     [...overlay.querySelectorAll(".seg b")].forEach(b=>b.addEventListener("click",()=>{
       diffKey=b.dataset.k;
       [...overlay.querySelectorAll(".seg b")].forEach(x=>x.classList.toggle("on",x.dataset.k===diffKey));
-      $("segHint").textContent=DIFFS[diffKey].sub;
+      $("segHint").textContent=DIFFS[diffKey].sub; refreshHigh();
     }));
     $("playBtn").addEventListener("click", start);
     $("lbLink").addEventListener("click", ()=>showLeaderboard());
@@ -349,14 +358,21 @@
     return trimmed.indexOf(entry);
   }
   // 开放写入的后端 → 清洗脏/伪造数据
+  const DIFF_KEYS=["easy","normal","hard"];
   function sanitize(arr){
     if(!Array.isArray(arr)) return [];
     const clean=arr.filter(e=>e && typeof e.name==="string" && Number.isFinite(e.score) && e.score>=0 && e.score<1e7)
-      .map(e=>({name:String(e.name).slice(0,10), score:Math.floor(e.score), diff:typeof e.diff==="string"?e.diff.slice(0,8):""}));
-    // 每个名字只保留最高分(一人一条)
+      .map(e=>{ let d=(typeof e.diff==="string")?e.diff:""; if(!DIFF_KEYS.includes(d)) d="normal";
+        return {name:String(e.name).slice(0,10), score:Math.floor(e.score), diff:d}; });
+    // 每个(难度,名字)只保留最高分 → 一人一难度一条
     const best=new Map();
-    for(const e of clean){ const p=best.get(e.name); if(!p || e.score>p.score) best.set(e.name,e); }
-    return [...best.values()].sort((a,b)=>b.score-a.score).slice(0,GLB_MAX);
+    for(const e of clean){ const k=e.diff+" "+e.name; const p=best.get(k); if(!p || e.score>p.score) best.set(k,e); }
+    // 每个难度各保留前 30
+    const byDiff={easy:[],normal:[],hard:[]};
+    for(const e of best.values()) byDiff[e.diff].push(e);
+    let out=[];
+    for(const d of DIFF_KEYS) out=out.concat(byDiff[d].sort((a,b)=>b.score-a.score).slice(0,GLB_MAX));
+    return out;
   }
   function withTimeout(ms){ try{ const c=new AbortController(); setTimeout(()=>c.abort(),ms); return c.signal; }catch(e){ return undefined; } }
   async function fetchGlobal(){
@@ -370,14 +386,15 @@
       try{
         const cur=await fetchGlobal();
         const list=sanitize((cur||[]).concat([entry]));
-        const made=list.some(e=>e.name===entry.name && e.score===entry.score);
+        const hit=e=>e.name===entry.name && e.score===entry.score && e.diff===entry.diff;
+        const made=list.some(hit);
         const r=await fetch(GLB_URL,{method:"PUT",headers:{"Content-Type":"application/json"},
           body:JSON.stringify({name:"PLOX_GLOBAL_LEADERBOARD",data:{scores:list}}), signal:withTimeout(8000)});
         if(!r.ok) throw 0;
         last=list;
-        if(!made) return list;                  // 没进前30,无需校验
+        if(!made) return list;                  // 没进该难度前30,无需校验
         const after=await fetchGlobal();
-        if(after && after.some(e=>e.name===entry.name && e.score===entry.score)) return after;
+        if(after && after.some(hit)) return after;
       }catch(e){ /* 重试 */ }
     }
     return last;
@@ -393,21 +410,28 @@
         '</td><td class="nm">'+escapeHtml(e.name)+'</td><td class="sc">'+e.score+'</td></tr>'; });
     return h+'</table>';
   }
-  function lbScreen(inner, sub){
-    overlay.innerHTML='<h1>🏆 排行榜</h1>'+inner+
-      '<p style="font-size:11px">'+sub+'</p><button class="play" id="lbBack">返回</button>';
-    overlay.classList.remove("hidden");
-    $("lbBack").addEventListener("click", showMenu);
-  }
-  function showLeaderboard(hiName, hiScore){
+  let lbCache=null;   // 缓存抓取结果,切换难度标签不必重新请求
+  function showLeaderboard(diff, hiName, hiScore){
     state="menu"; stopMusic();
+    const d=DIFF_KEYS.includes(diff)?diff:diffKey;
     const hi=hiName || (localStorage.getItem(NAME_KEY)||"");
-    lbScreen('<p style="font-size:12px;color:var(--dim)">加载全球榜…</p>','');
-    fetchGlobal().then(g=>{
-      if(state!=="menu") return;
-      if(g!==null) lbScreen(lbTable(g,hi,hiScore),'🌍 全球排行榜');
-      else lbScreen(lbTable(getLB(),hi,hiScore),'⚠ 离线 · 仅显示本机');
-    });
+    overlay.innerHTML='<h1>🏆 排行榜</h1><p style="font-size:12px;color:var(--dim)">加载全球榜…</p>';
+    overlay.classList.remove("hidden");
+    fetchGlobal().then(g=>{ if(state!=="menu") return; lbCache=g; renderLb(d,hi,hiScore); });
+  }
+  function renderLb(d, hiName, hiScore){
+    const online=lbCache!==null;
+    const src=online?lbCache:getLB();
+    const list=src.filter(e=>(e.diff||"normal")===d).sort((a,b)=>b.score-a.score);
+    const tabs=DIFF_KEYS.map(k=>'<b class="'+(k===d?'on':'')+'" data-d="'+k+'">'+DIFFS[k].label+'</b>').join('');
+    overlay.innerHTML='<h1>🏆 排行榜</h1>'+
+      '<div class="lbtabs">'+tabs+'</div>'+
+      lbTable(list,hiName,hiScore)+
+      '<p style="font-size:11px">'+(online?'🌍 全球':'⚠ 离线·本机')+' · '+DIFFS[d].label+'难度</p>'+
+      '<button class="play" id="lbBack">返回</button>';
+    overlay.classList.remove("hidden");
+    [...overlay.querySelectorAll('.lbtabs b')].forEach(b=>b.addEventListener('click',()=>renderLb(b.dataset.d,hiName,hiScore)));
+    $("lbBack").addEventListener("click", showMenu);
   }
   function showNameEntry(){
     state="menu"; stopMusic();
@@ -426,7 +450,7 @@
       localStorage.setItem(NAME_KEY,nm); addToLB(raw);
       overlay.innerHTML='<h1>上传中…</h1><p style="font-size:12px;color:var(--dim)">正在提交到全球排行榜</p>';
       await submitGlobal({name:nm, score:snapScore, diff:snapDiff});
-      showLeaderboard(nm, snapScore);
+      showLeaderboard(snapDiff, nm, snapScore);
     };
     $("nameOk").addEventListener("click", submit);
     inp.addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); submit(); } });
@@ -438,8 +462,8 @@
   }
   function gameOver(){
     state="gameover"; stopMusic();
-    const isRecord = score>0 && score>high;   // 个人新纪录?(只有刷新最高分才上传)
-    if(score>high){ high=score; localStorage.setItem("plox_high",high); elHigh.textContent=high; }
+    const isRecord = score>0 && score>high;   // 刷新「当前难度」个人最高?才上传
+    if(isRecord){ high=score; setBest(diffKey,score); elHigh.textContent=high; }
     beep(140,.25,"sawtooth",.15);
     if(isRecord){ showNameEntry(); return; }
     overlay.innerHTML='<h1>结束</h1>'+
@@ -596,21 +620,18 @@
     const sc=opt.scale||1, p=Math.max(2,cell*0.07), s=(cell-p*2)*sc;
     const cx=(colF+0.5)*cell, cy=(rowF+0.5)*cell, x=cx-s/2, y=cy-s/2;
     const col=COLORS[idx]||COLORS[0];
+    const rad=cell*0.16;
     g.save();
-    if(opt.ghost){ // 半透明落点:用方块本色的渐变,清晰看得出颜色
-      const gg=g.createLinearGradient(x,y,x,y+s);
-      gg.addColorStop(0,col.glow); gg.addColorStop(1,col.fill);
-      g.globalAlpha=.55; g.fillStyle=gg; rr(g,x,y,s,s,cell*0.18); g.fill();
-      g.globalAlpha=1; g.strokeStyle=col.glow; g.lineWidth=Math.max(2,cell*0.08);
-      rr(g,x,y,s,s,cell*0.18); g.stroke(); g.restore(); return; }
-    g.shadowColor=col.glow; g.shadowBlur=cell*0.22*(opt.glow||1);   // 柔和辉光,不刺眼
-    const grad=g.createLinearGradient(x,y,x,y+s);
-    grad.addColorStop(0,col.glow); grad.addColorStop(.5,col.fill); grad.addColorStop(1,col.fill);
-    g.fillStyle=grad; if(opt.alpha!=null) g.globalAlpha=opt.alpha;
-    rr(g,x,y,s,s,cell*0.18); g.fill();
-    g.shadowBlur=0; g.globalAlpha=(opt.alpha!=null?opt.alpha:1)*0.32;
-    g.fillStyle="rgba(255,255,255,.7)";
-    rr(g,x+s*0.16,y+s*0.14,s*0.5,s*0.2,cell*0.1); g.fill();
+    if(opt.ghost){ // 落点:淡实色填充 + 实线边框(无辉光)
+      g.globalAlpha=.32; g.fillStyle=col.fill; rr(g,x,y,s,s,rad); g.fill();
+      g.globalAlpha=.85; g.strokeStyle=col.glow; g.lineWidth=Math.max(2,cell*0.07);
+      rr(g,x,y,s,s,rad); g.stroke(); g.restore(); return; }
+    // 纯实色方块 + 实线边框,完全无光晕(久看不累)
+    g.fillStyle=col.fill; if(opt.alpha!=null) g.globalAlpha=opt.alpha;
+    rr(g,x,y,s,s,rad); g.fill();
+    g.globalAlpha=(opt.alpha!=null?opt.alpha:1);
+    g.strokeStyle=col.glow; g.lineWidth=Math.max(1.5,cell*0.05);
+    rr(g,x,y,s,s,rad); g.stroke();
     g.restore();
   }
 
@@ -641,8 +662,8 @@
       for(let i=0;i<current.colors.length;i++) drawBlock(ctx,visCol,visRow+i,current.colors[i],{glow:1.1});
     }
 
-    for(const p of particles){ ctx.save(); ctx.globalAlpha=Math.max(0,p.life);
-      ctx.shadowColor=p.color; ctx.shadowBlur=10; ctx.fillStyle=p.color;
+    for(const p of particles){ ctx.save(); ctx.globalAlpha=Math.max(0,p.life)*0.9;
+      ctx.fillStyle=p.color;
       ctx.beginPath(); ctx.arc(p.x,p.y,p.size*Math.max(0,p.life),0,7); ctx.fill(); ctx.restore(); }
 
     for(const q of popups){ ctx.save(); ctx.globalAlpha=Math.max(0,q.life);
@@ -662,9 +683,8 @@
       ctx.fillText("NEXT", px+pw/2, py+11);
       for(let i=0;i<n;i++){ const col=COLORS[next.colors[i]]||COLORS[0];
         const bx=px+pad, by=py+15+i*pc, s=pc-3;
-        ctx.shadowColor=col.glow; ctx.shadowBlur=7;
-        const gr=ctx.createLinearGradient(bx,by,bx,by+s); gr.addColorStop(0,col.glow); gr.addColorStop(1,col.fill);
-        ctx.fillStyle=gr; rr(ctx,bx,by,s,s,s*0.2); ctx.fill(); ctx.shadowBlur=0; }
+        ctx.fillStyle=col.fill; rr(ctx,bx,by,s,s,s*0.2); ctx.fill();
+        ctx.strokeStyle=col.glow; ctx.lineWidth=1.4; rr(ctx,bx,by,s,s,s*0.2); ctx.stroke(); }
       ctx.restore();
     }
 
