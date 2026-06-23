@@ -25,12 +25,12 @@
     background:linear-gradient(90deg,var(--accent2),var(--accent));
     -webkit-background-clip:text; background-clip:text; color:transparent;}
   .gear{appearance:none; -webkit-appearance:none; background:transparent; border:none; cursor:pointer;
-    color:var(--dim); font-size:21px; line-height:1; width:34px; height:34px; border-radius:10px;
+    color:var(--dim); font-size:21px; line-height:1; width:44px; height:44px; border-radius:12px;
     display:flex; align-items:center; justify-content:center; transition:.15s;}
   .gear:hover{color:var(--accent);}
   .gear:active{transform:scale(.9) rotate(35deg);}
   .gear svg{width:21px; height:21px; fill:currentColor; display:block;}
-  .topbtns{display:flex; align-items:center; gap:2px;}
+  .topbtns{display:flex; align-items:center; gap:6px;}
   #pauseBtn{display:none;}        /* 只有游戏进行中才显示 */
   #pauseBtn svg{width:18px; height:18px;}
   body.ingame #pauseBtn{display:flex;}
@@ -74,12 +74,16 @@
   .scard{width:100%; max-width:320px; background:linear-gradient(180deg, rgba(34,13,68,.98), rgba(18,7,40,.98));
     border:1px solid rgba(150,90,255,.28); border-radius:22px; padding:20px 18px 16px;
     box-shadow:0 24px 70px rgba(0,0,0,.6);}
-  .scard h3{margin:0 0 14px; text-align:center; font-size:13px; font-weight:700; letter-spacing:.34em;
+  .sgrip{width:40px; height:4px; border-radius:2px; background:rgba(200,168,255,.32); margin:-6px auto 12px;}
+  .scard h3{margin:0 0 12px; text-align:center; font-size:13px; font-weight:700; letter-spacing:.34em;
     color:var(--dim); text-transform:uppercase;}
+  .sgroup{background:rgba(150,90,255,.055); border:1px solid rgba(150,90,255,.14); border-radius:15px; padding:2px 13px; margin-bottom:11px;}
   .srow{width:100%; display:flex; align-items:center; justify-content:space-between; gap:10px;
     background:none; border:none; cursor:pointer; color:var(--txt); font-size:15px; font-weight:600;
-    padding:13px 6px; border-bottom:1px solid rgba(150,90,255,.12); text-align:left;}
+    padding:13px 2px; border-bottom:1px solid rgba(150,90,255,.12); text-align:left;}
   .srow:last-of-type{border-bottom:none;}
+  .sgroup .srow:last-child{border-bottom:none;}
+  .sgroup .trackSel{border-bottom:none; padding:4px 0 9px;}
   .sw{font-size:12px; font-weight:800; letter-spacing:.08em; min-width:46px; text-align:center;
     padding:5px 0; border-radius:999px; color:var(--dim); background:rgba(150,90,255,.12);
     border:1px solid rgba(150,90,255,.2);}
@@ -191,6 +195,8 @@
   .diffCard .dcBars{display:flex; gap:4px; align-items:flex-end; height:15px;}
   .diffCard .dcBars i{width:5px; height:15px; border-radius:2px; background:rgba(255,255,255,.13);}
   .diffCard .dcBars i.on{background:#9b73d0;}
+  .diffCard .dcSub{font-size:10px; color:#8f7cbf; letter-spacing:.02em; white-space:nowrap;}
+  .diffCard.on .dcSub{color:#bfe8ff;}
   .diffCard .dcBest{font-size:11px; color:#8f7cbf; font-variant-numeric:tabular-nums;}
   .diffCard:active{transform:scale(.97);}
   .diffCard.on{color:#fff; background:rgba(41,197,255,.1); border-color:transparent; transform:translateY(-3px) scale(1.05);
@@ -215,7 +221,49 @@
   .actBtn .ic{width:19px; height:19px;}
   .actBtn.shop .ic{color:#d9c8ff;} .actBtn.lb .ic{color:#ffd86a;}
   .actBtn:active{transform:scale(.96); background:rgba(255,255,255,.085);}
-  .menuFoot{font-size:11px; letter-spacing:.1em; color:#6d5f95; text-align:center; margin-top:2px;}
+  .menuHelp{font-size:12px; letter-spacing:.14em; color:#8f7cbf; text-align:center; margin-top:2px;
+    cursor:pointer; padding:4px 10px; border-bottom:1px dashed rgba(155,115,208,.4); transition:color .15s;}
+  .menuHelp:active{color:var(--accent);}
+  /* ================= 结算 / 复活 / 玩法 ================= */
+  .ovr,.rules{display:flex; flex-direction:column; align-items:center; justify-content:center; gap:13px; width:100%; padding:6px 4px;}
+  .ovTitle{margin:0; font-size:30px; font-weight:900; letter-spacing:.12em;
+    background:linear-gradient(90deg,#5fe0ff,#ff5fd0); -webkit-background-clip:text; background-clip:text; color:transparent;}
+  .ovTitle.warn{background:linear-gradient(90deg,#ffb14d,#ff5a3c); -webkit-background-clip:text; background-clip:text;}
+  .ovScore{font-size:14px; color:var(--dim);} .ovScore b{color:#fff; font-size:22px; font-weight:900;}
+  .ovHint{font-size:12px; color:var(--dim);} .ovHint b{color:#ffd86a;}
+  .reviveBtns{display:flex; flex-direction:column; gap:10px; width:min(300px,82vw); margin-top:2px;}
+  .reviveBtn{display:flex; align-items:center; justify-content:center; gap:8px; width:100%; margin:0; padding:14px; font-size:16px;}
+  .reviveBtn.ad{background:linear-gradient(95deg,#3ad07a,#1fa85e); box-shadow:0 8px 24px rgba(31,168,94,.36);}
+  .reviveBtn.coin{background:linear-gradient(95deg,#ffd86a,#ffb02e); color:#3a2400; box-shadow:0 8px 24px rgba(255,176,46,.34);}
+  .reviveBtn.coin .coin{width:18px; height:18px;}
+  .reviveBtn.off{opacity:.45; filter:grayscale(.4); pointer-events:none;}
+  .settleScore{display:flex; flex-direction:column; align-items:center; gap:2px;}
+  .settleScore span{font-size:12px; color:var(--dim); letter-spacing:.1em;}
+  .settleScore b{font-size:38px; font-weight:900; color:#fff; font-variant-numeric:tabular-nums; line-height:1;
+    text-shadow:0 0 22px rgba(120,200,255,.4);}
+  .settleStats{display:flex; gap:9px; width:min(320px,84vw);}
+  .settleStats .sc{flex:1; background:rgba(255,255,255,.04); border:1px solid rgba(155,115,208,.18);
+    border-radius:13px; padding:9px 4px; text-align:center;}
+  .settleStats .sck{font-size:10px; color:var(--dim); letter-spacing:.08em;}
+  .settleStats .scv{font-size:17px; font-weight:800; color:var(--txt); margin-top:2px; font-variant-numeric:tabular-nums;}
+  .settleMeta{font-size:11px; color:#8f7cbf; text-align:center;} .settleMeta .cy{color:#ffd86a;}
+  .settleActions{display:flex; gap:8px; width:min(320px,84vw);}
+  .actBtn2{flex:1; appearance:none; -webkit-appearance:none; cursor:pointer; padding:11px 4px; border-radius:12px;
+    font-size:13px; font-weight:700; color:var(--txt); background:rgba(255,255,255,.045); border:1px solid rgba(200,168,255,.2); transition:transform .12s, background .15s;}
+  .actBtn2:active{transform:scale(.95); background:rgba(255,255,255,.09);}
+  /* 玩法说明 */
+  .ruleList{display:flex; flex-direction:column; gap:9px; width:min(320px,86vw);}
+  .ruleRow{display:flex; align-items:center; gap:12px; padding:9px 13px; border-radius:13px;
+    background:rgba(150,90,255,.07); border:1px solid rgba(150,90,255,.18);}
+  .ruleRow .ri{width:30px; height:30px; flex:none; display:flex; align-items:center; justify-content:center; color:#9be3ff;}
+  .ruleRow .ri .ic{width:26px; height:26px;}
+  .ruleRow .rt{text-align:left; min-width:0;}
+  .ruleRow .rt b{font-size:14px; color:var(--txt); font-weight:700;}
+  .ruleRow .rt span{display:block; font-size:11px; color:var(--dim); margin-top:1px;}
+  .ruleNotes{width:min(320px,86vw); text-align:left;}
+  .ruleNotes p{margin:6px 0; font-size:12px; line-height:1.5; color:var(--dim);}
+  .ruleNotes b{color:#cdbdf0;} .ruleNotes .warn{color:#ff7a4d; font-weight:700;}
+  .warn{color:#ff7a4d;}
   /* ---- 金币 + 道具 + 商店 ---- */
   .coins{display:inline-flex; align-items:center; gap:4px; font-size:13px; font-weight:800;
     color:#ffd86a; padding:3px 9px; margin-right:4px; border-radius:11px; white-space:nowrap;
@@ -225,12 +273,13 @@
     background:radial-gradient(circle at 35% 30%, #fff0bf, #f3bd3c 62%, #d79420 100%);
     box-shadow:inset 0 0 0 1px rgba(140,92,12,.55), inset 1px 1px 1px rgba(255,255,255,.4); vertical-align:-2px;}
   .buyBtn .coin{margin-right:5px; width:14px; height:14px;}
-  /* 炸弹图标(SVG 图形):下方 N 条「行」着色表示威力,3 行紫、4 行红 */
+  /* 炸弹图标(SVG 图形):下方 N 条「行」=威力。小=青蓝、大=橙红,弹体大小也不同 → 一眼可辨 */
   .bw{display:inline-flex; flex:none;}
   .bicon{width:22px; height:22px; display:block;}
-  .bw3{color:#b9a0ee;}   /* 炸 3 行 */
-  .bw4{color:#ff7a68;}   /* 炸 4 行 */
-  .shopRow .bicon{width:32px; height:32px;}
+  .bw-cool{color:#5fd0ff;}   /* 普通炸弹(青蓝) */
+  .bw-hot{color:#ff6a45;}    /* 巨型炸弹(橙红) */
+  .shopRow .bicon{width:30px; height:30px;}
+  .shopRow .bicon.big{width:40px; height:40px;}   /* 巨型在商店里更大,强化区分 */
   /* 排行榜前三:金/银/铜奖牌(图形徽章) */
   .lb .medal{display:inline-flex; align-items:center; justify-content:center; width:21px; height:21px; border-radius:50%;
     font-size:11px; font-weight:900; color:#4a3400; margin:0 auto;
@@ -238,14 +287,18 @@
   .lb .medal.m1{background:radial-gradient(circle at 35% 28%, #fff2b8, #f4c63a 58%, #d4960f);}
   .lb .medal.m2{background:radial-gradient(circle at 35% 28%, #ffffff, #cfd6df 58%, #97a1ad); color:#3a4048;}
   .lb .medal.m3{background:radial-gradient(circle at 35% 28%, #ffd9b3, #d98a4e 58%, #a85f2c); color:#3d2410;}
-  .itembar{position:absolute; right:6px; bottom:8px; z-index:4;
-    display:none; flex-direction:column; gap:6px; align-items:flex-end;}
+  /* 道具栏:棋盘「下方」独立一行,不再盖在画布上(避免干扰游戏) */
+  .itembar{display:none; width:100%; max-width:520px; justify-content:center; align-items:center; gap:10px; margin-top:8px;}
   body.ingame .itembar{display:flex;}
+  .itembar:empty{display:none;}
   .itembtn{appearance:none; -webkit-appearance:none; cursor:pointer; font-weight:800; line-height:1;
-    display:flex; align-items:center; gap:4px; padding:8px 12px; border-radius:13px; font-size:15px; color:#fff;
-    background:rgba(20,4,45,.72); border:1px solid rgba(150,90,255,.4);
-    backdrop-filter:blur(3px); box-shadow:0 4px 14px rgba(0,0,0,.35);}
-  .itembtn .n{font-size:12px; color:#9b86c9; font-weight:700;}
+    display:flex; align-items:center; gap:6px; padding:9px 16px; min-height:46px; border-radius:14px; font-size:15px; color:#fff;
+    background:rgba(28,10,58,.85); border:1px solid rgba(150,90,255,.42); box-shadow:0 4px 14px rgba(0,0,0,.3);
+    transition:transform .1s, background .15s;}
+  .itembtn .bicon{width:26px; height:26px;}
+  .itembtn .n{font-size:13px; color:#cdbdf0; font-weight:800;}
+  .itembtn:active{transform:scale(.93); background:rgba(40,16,80,.9);}
+  .itembtn:disabled{opacity:.4; pointer-events:none;}
   .itembtn:active{transform:scale(.92);}
   .itembtn:disabled{opacity:.4; pointer-events:none;}
   .shopList{display:flex; flex-direction:column; gap:10px; width:min(340px,86vw); margin:4px auto 0;}

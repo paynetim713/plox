@@ -2,10 +2,11 @@
 // 道具用金币购买(见 economy.js),局内使用。库存存本地,接口稳定方便 platform.js 接管。
 const INV_KEY = "plox_items";
 
-// 目前两种炸弹:炸掉棋盘最下方 N 行。后续可在此追加新道具,商店/局内栏会自动列出。
+// 两种炸弹:炸掉棋盘最下方 N 行。后续可在此追加新道具,商店/局内栏会自动列出。
+// tone:图标/配色基调(cool=青蓝小炸弹,hot=橙红大炸弹),让两者一眼可辨。
 export const ITEMS = {
-  bomb3: { id:"bomb3", name:"炸弹",     short:"炸3", cost:1, rows:3, desc:"炸掉最下方 3 行" },
-  bomb4: { id:"bomb4", name:"巨型炸弹", short:"炸4", cost:2, rows:4, desc:"炸掉最下方 4 行" },
+  bomb:    { id:"bomb",    name:"炸弹",     cost:1, rows:2, tone:"cool", desc:"炸掉最下方 2 行" },
+  bombBig: { id:"bombBig", name:"巨型炸弹", cost:3, rows:3, tone:"hot",  desc:"炸掉最下方 3 行" },
 };
 export const ITEM_LIST = Object.keys(ITEMS);   // 稳定顺序
 
