@@ -24,13 +24,25 @@ import { ITEMS, ITEM_LIST, getItem, addItem, useItem, ownedItems } from "./items
   const elCoinNum=$("coinNum");
   function syncCoins(){ if(elCoinNum) elCoinNum.textContent=getCoins(); }
   syncCoins();
-  // 局内道具栏:只列出已拥有的道具,点一下用一个
+  // 炸弹图标(纯图形):深色弹体 + 火芯导线 + 下方 N 条「被炸的行」,行数即可视化威力
+  function bombSvg(rows){
+    let bars=""; const n=rows, bw=16, x=(24-bw)/2, gap=2.35, h=1.7, y0=23-n*gap;
+    for(let i=0;i<n;i++){ const y=(y0+i*gap).toFixed(2);
+      bars+='<rect x="'+x+'" y="'+y+'" width="'+bw+'" height="'+h+'" rx="0.85" fill="currentColor" opacity="'+(0.5+0.12*i).toFixed(2)+'"/>'; }
+    return '<svg class="bicon" viewBox="0 0 24 24" aria-hidden="true">'+bars+
+      '<circle cx="12" cy="6.8" r="4.6" fill="#23232f"/>'+
+      '<circle cx="10.3" cy="5.1" r="1.5" fill="rgba(255,255,255,.22)"/>'+
+      '<path d="M14.6 3 q1.7 -1.1 2.9 .5" stroke="#ff9a3c" stroke-width="1.3" fill="none" stroke-linecap="round"/>'+
+      '<circle cx="17.5" cy="3" r="1.2" fill="#ffd86a"/></svg>';
+  }
+  const bombIcon=it=>'<span class="bw bw'+it.rows+'">'+bombSvg(it.rows)+'</span>';
+  // 局内道具栏:只列出已拥有的道具,点一下用一个(纯图形炸弹 + 数量)
   function renderItemBar(){
     if(!elItembar) return;
     const owned=ownedItems();
     elItembar.innerHTML = owned.map(id=>{
       const it=ITEMS[id];
-      return '<button class="itembtn" data-id="'+id+'" title="'+it.desc+'">'+it.short+'<span class="n">×'+getItem(id)+'</span></button>';
+      return '<button class="itembtn" data-id="'+id+'" title="'+it.desc+'">'+bombIcon(it)+'<span class="n">×'+getItem(id)+'</span></button>';
     }).join("");
     [...elItembar.querySelectorAll(".itembtn")].forEach(b=>
       b.addEventListener("click", ()=>useBomb(b.dataset.id)));
@@ -157,7 +169,7 @@ import { ITEMS, ITEM_LIST, getItem, addItem, useItem, ownedItems } from "./items
     state="start";
     const rows = ITEM_LIST.map(id=>{
       const it=ITEMS[id], own=getItem(id);
-      return '<div class="shopRow"><div class="ic"><i class="ic-bomb'+(it.rows>=4?' big':'')+'"></i></div>'+
+      return '<div class="shopRow"><div class="ic">'+bombIcon(it)+'</div>'+
         '<div class="meta"><div class="nm">'+it.name+'</div><div class="ds">'+it.desc+'</div>'+
         '<div class="own">已拥有 '+own+'</div></div>'+
         '<button class="buyBtn" data-id="'+id+'"><i class="coin"></i>'+it.cost+'</button></div>';
@@ -250,7 +262,8 @@ import { ITEMS, ITEM_LIST, getItem, addItem, useItem, ownedItems } from "./items
     list.slice(0,GLB_SHOW).forEach((e,i)=>{
       const me=!hit && hiName && e.name===hiName && (hiScore==null || e.score===hiScore);
       if(me) hit=true;
-      h+='<tr class="'+(me?'me':'')+'"><td class="rk'+(i<3?' top'+(i+1):'')+'">'+(i+1)+
+      const rk = i<3 ? '<span class="medal m'+(i+1)+'">'+(i+1)+'</span>' : (i+1);
+      h+='<tr class="'+(me?'me':'')+'"><td class="rk">'+rk+
         '</td><td class="nm">'+escapeHtml(e.name)+'</td><td class="sc">'+e.score+'</td></tr>'; });
     return h+'</table>';
   }
@@ -471,7 +484,7 @@ import { ITEMS, ITEM_LIST, getItem, addItem, useItem, ownedItems } from "./items
   function spawnStageBanner(stage, reward){
     popups.length=0;
     popups.push({x:COLS*CELL/2, y:ROWS*CELL*0.32, life:1.6, age:0, tier:4, banner:true,
-      word:"第 "+stage+" 关", col:"#ffd86a", sub: reward?("金币 +"+reward):"加油!"});
+      word:"第 "+stage+" 关", col:"#ffd86a", sub: reward?("+"+reward):"加油!", coin: !!reward});
     beep(660,.14,"triangle",.12); beep(990,.13,"sine",.09); beep(1320,.12,"sine",.06);
     shakeT=Math.min(200,150); freezeT=Math.min(90,70);
     syncHUD();
@@ -599,9 +612,21 @@ import { ITEMS, ITEM_LIST, getItem, addItem, useItem, ownedItems } from "./items
       ctx.font="900 "+fs+"px system-ui,sans-serif";                 // 夸奖词:描边+实色(无辉光)
       ctx.lineWidth=Math.max(3,CELL*0.1); ctx.strokeStyle="rgba(8,2,20,.92)"; ctx.strokeText(q.word,0,0);
       ctx.fillStyle=q.col; ctx.fillText(q.word,0,0);
-      ctx.font="800 "+Math.round(CELL*0.4)+"px system-ui,sans-serif"; // +分
-      ctx.lineWidth=Math.max(2,CELL*0.07); ctx.strokeStyle="rgba(8,2,20,.92)"; ctx.strokeText(q.sub,0,fs*0.8);
-      ctx.fillStyle="#fff"; ctx.fillText(q.sub,0,fs*0.8);
+      const subY=fs*0.8, subFs=Math.round(CELL*0.4);
+      ctx.font="800 "+subFs+"px system-ui,sans-serif";
+      if(q.coin){   // 过关奖励:画一枚金币图形 + 「+N」
+        const tw=ctx.measureText(q.sub).width, r=subFs*0.46, gap=subFs*0.26, cx=-(r*2+gap+tw)/2+r;
+        const grd=ctx.createRadialGradient(cx-r*0.3,subY-r*0.3,r*0.2,cx,subY,r);
+        grd.addColorStop(0,"#fff0bf"); grd.addColorStop(.62,"#f3bd3c"); grd.addColorStop(1,"#d79420");
+        ctx.beginPath(); ctx.arc(cx,subY,r,0,7); ctx.fillStyle=grd; ctx.fill();
+        ctx.lineWidth=Math.max(1,r*0.16); ctx.strokeStyle="rgba(140,92,12,.75)"; ctx.stroke();
+        ctx.textAlign="left"; const tx=cx+r+gap;
+        ctx.lineWidth=Math.max(2,CELL*0.07); ctx.strokeStyle="rgba(8,2,20,.92)"; ctx.strokeText(q.sub,tx,subY);
+        ctx.fillStyle="#ffe9a8"; ctx.fillText(q.sub,tx,subY); ctx.textAlign="center";
+      } else {
+        ctx.lineWidth=Math.max(2,CELL*0.07); ctx.strokeStyle="rgba(8,2,20,.92)"; ctx.strokeText(q.sub,0,subY);
+        ctx.fillStyle="#fff"; ctx.fillText(q.sub,0,subY);
+      }
       ctx.restore(); }
 
     // 移动端:画布内显示「下一个」(侧栏已隐藏)
