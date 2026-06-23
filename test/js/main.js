@@ -712,7 +712,7 @@ import { showRewardedAd, hasRewardedAd } from "./platform.js";
     let ox=0,oy=0;
     if(shakeT>0){ const m=Math.min(8, shakeT/22); ox=(Math.random()*2-1)*m; oy=(Math.random()*2-1)*m; }   // 真正可见的震屏
     ctx.save(); ctx.clearRect(0,0,cv.width,cv.height); ctx.translate(ox,oy);
-    ctx.fillStyle=bgGrad||"#0a0118"; ctx.fillRect(-4,-4,COLS*CELL+8,ROWS*CELL+8);
+    ctx.fillStyle=bgGrad||"#0a0118"; ctx.fillRect(-9,-9,COLS*CELL+18,ROWS*CELL+18);   // 盖住最大 8px 震屏偏移,避免边缘露透明条
     ctx.strokeStyle="rgba(150,90,255,.10)"; ctx.lineWidth=1;
     for(let c=0;c<=COLS;c++){ ctx.beginPath(); ctx.moveTo(c*CELL,0); ctx.lineTo(c*CELL,ROWS*CELL); ctx.stroke(); }
     for(let r=0;r<=ROWS;r++){ ctx.beginPath(); ctx.moveTo(0,r*CELL); ctx.lineTo(COLS*CELL,r*CELL); ctx.stroke(); }
@@ -925,9 +925,13 @@ import { showRewardedAd, hasRewardedAd } from "./platform.js";
   document.addEventListener("touchstart", e=>{ if(e.touches.length>1) e.preventDefault(); }, {passive:false});
   let lastTouchEnd=0;
   document.addEventListener("touchend", e=>{
-    if(e.target===cv){ lastTouchEnd=performance.now(); return; }   // 画布连点(旋转)不受双击防抖干扰
+    const t=e.target;
+    // 画布旋转连点、以及任何按钮/链接/输入/选项上的点击都不拦截 —— 否则 iOS 上 preventDefault 会吞掉合成 click
+    if(t===cv || (t.closest && t.closest("button,a,input,.link,[data-track],[data-k],[data-id],[data-act],[data-tog]"))){
+      lastTouchEnd=performance.now(); return; }
     const now=performance.now();
-    if(now-lastTouchEnd<=350) e.preventDefault(); lastTouchEnd=now; }, {passive:false});
+    if(now-lastTouchEnd<=350) e.preventDefault();
+    lastTouchEnd=now; }, {passive:false});
   document.addEventListener("dblclick", e=>e.preventDefault());
 
   // ---------- 触摸操作:轻点=旋转,左右拖=逐格移动(对起点累计),慢速下拖=可控软降,快速下甩=硬降 ----------
