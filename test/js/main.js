@@ -547,9 +547,10 @@ import { COLS, ROWS, COLORS, FIXED_COLORS, PIECE_LEN, PLAYER_INTERVAL, JUNK_FALL
   }
 
   // ---------- 主循环 ----------
-  let last=0;
+  let last=0, _lastState="";
   function loop(t){
     const dt=Math.min(60,t-(last||t)); last=t;
+    if(state!==_lastState){ _lastState=state; document.body.classList.toggle("ingame", state==="playing"); }  // 暂停键只在进行中显示
     if(freezeT>0){ freezeT=Math.max(0,freezeT-dt); render(); requestAnimationFrame(loop); return; }  // 顿帧:全局短暂定格
     if(state==="playing"){
       if(sub==="control"){
