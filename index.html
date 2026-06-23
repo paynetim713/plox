@@ -219,7 +219,8 @@
     const f=t=> amt>=0 ? Math.round(t+(255-t)*amt) : Math.round(t*(1+amt));
     return "rgb("+f(R)+","+f(G)+","+f(B)+")";
   }
-  COLORS.forEach(c=>{ c.top=shade(c.fill,.16); c.dark=shade(c.fill,-.2); c.edge=shade(c.fill,-.34); });
+  COLORS.forEach(c=>{ c.top=shade(c.fill,.16); c.dark=shade(c.fill,-.2); c.edge=shade(c.fill,-.34);
+    c.gfill=shade(c.fill,-.52); c.gedge=shade(c.fill,-.66); });   // 落点预览:压暗的实心色
   // 每组固定 3 个随机色块,玩家方块下落速度统一不变。
   // 难度 = 系统「随机乱入」一组(玩家无法操作)方块组的频率:简单很少、普通适中、困难频繁。
   // junkMin/junkMax = 每隔多少个玩家方块,乱入一波(1~2 组)。数字越小越频繁越难。
@@ -629,9 +630,9 @@
     const col=COLORS[idx]||COLORS[0];
     const rad=cell*0.2;
     g.save();
-    if(opt.ghost){ // 落点:淡填充 + 描边(无辉光)
-      g.globalAlpha=.3; g.fillStyle=col.fill; rr(g,x,y,s,s,rad); g.fill();
-      g.globalAlpha=.8; g.strokeStyle=col.glow; g.lineWidth=Math.max(2,cell*0.06);
+    if(opt.ghost){ // 落点:实心,只是比真方块暗一些(好分辨)
+      g.fillStyle=col.gfill; rr(g,x,y,s,s,rad); g.fill();
+      g.strokeStyle=col.gedge; g.lineWidth=Math.max(1.5,cell*0.045);
       rr(g,x,y,s,s,rad); g.stroke(); g.restore(); return; }
     const a=(opt.alpha!=null)?opt.alpha:1;
     // 立体渐变(亮顶→本色→暗底)+ 顶部光泽 + 干净描边,无发光光晕
