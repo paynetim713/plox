@@ -228,6 +228,9 @@
   const PIECE_LEN = 3;            // 每组固定 3 个色块
   const PLAYER_INTERVAL = 850;    // 玩家方块下落速度(各难度一致,稍慢更从容)
   const JUNK_FALL = 0.006;        // 乱入方块「匀速缓降」速度(格/毫秒,约6格/秒,比自然下落快一点点)
+  const ROT_MS = 120;             // 旋转动画时长(ms),让眼睛看到色块"转"
+  const PRAISE = ["不错","漂亮","超棒","惊艳","神级"];           // 连击梯度夸奖词
+  const PRAISE_COL = ["#eae0ff","#9be3ff","#ffd86a","#ff9ad2","#ff6a6a"];
   const DIFFS = {
     easy:   {label:"简单", sub:"干扰少", junkMin:9,  junkMax:13},
     normal: {label:"普通", sub:"干扰中", junkMin:6,  junkMax:8},
@@ -253,7 +256,7 @@
   let dropAccum=0, dropInterval=800, baseInterval=720, colorCount=5, pieceLen=3, softDrop=false;
   let junkMin=3, junkMax=4, pieceUntilJunk=4, justJunked=false;   // 难度:随机乱入方块组
   let clearing=null, clearTimer=0, flashPulse=0;
-  let visRow=0, visCol=3, shakeT=0;
+  let visRow=0, visCol=3, shakeT=0, rotT=0, freezeT=0;
   let high=0;   // 当前难度的个人最高分(各难度分开记)
   let ghostOn=true, soundOn=true, musicOn=true;
   let diffKey="normal";
@@ -533,9 +536,11 @@
     if(nl>level){ level=nl; }               // 升级只加分,不改速度
     clearing=m; clearTimer=CLEAR_MS; flashPulse=0;
     shakeT=Math.min(220, 60+m.size*14+combo*20);   // 震动减弱
+    if(m.size>=5 || combo>=3) freezeT=Math.min(80, 30+m.size*6);   // 大消除/连击:顿帧增重
     spawnPopup(gained, combo);
-    beep(440+combo*90,.12,"triangle",.12);
-    if(combo>1) beep(660+combo*70,.1,"sine",.08);
+    const f=440*Math.pow(2,Math.min(combo,8)/12);   // 连击越高音越高
+    beep(f,.12,"triangle",.10+Math.min(combo,6)*0.01);
+    if(combo>1) beep(f*1.5,.1,"sine",.07);
     syncHUD();
   }
   function applyClear(){
@@ -575,7 +580,8 @@
   // ---------- 操作 ----------
   const playing=()=>state==="playing"&&sub==="control";
   function move(d){ if(playing()&&valid(current.row,current.col+d,current.colors)){ current.col+=d; beep(330,.03,"sine",.05);} }
-  function rotate(){ if(playing()){ const c=current.colors; current.colors=[c[c.length-1],...c.slice(0,c.length-1)]; beep(520,.04,"sine",.06);} }
+  function rotate(){ if(playing()){ const c=current.colors; current.colors=[c[c.length-1],...c.slice(0,c.length-1)];
+    rotT=ROT_MS; beep(600,.045,"triangle",.07); beep(900,.03,"sine",.04); } }   // 专属双音"咔哒" + 滚动动画
   function hardDrop(){ if(!playing())return; let n=0; while(valid(current.row+1,current.col,current.colors)){current.row++;n++;} visRow=current.row; score+=n*2; syncHUD(); lockPiece(); }
   function ghostRow(){ let r=current.row; while(valid(r+1,current.col,current.colors)) r++; return r; }
   function syncHUD(){ elScore.textContent=score; elLevel.textContent=level; elCleared.textContent=cleared; elMaxCombo.textContent="×"+maxCombo; }
@@ -591,8 +597,9 @@
     }
   }
   function spawnPopup(gained, cb){
-    popups.push({x:COLS*CELL/2, y:ROWS*CELL*0.34, life:1,
-      text:"+"+gained, sub: cb>1?("连击 ×"+cb):""});
+    const tier=Math.min(cb-1, PRAISE.length-1);
+    popups.push({x:COLS*CELL/2, y:ROWS*CELL*0.34, life:1, age:0, tier:tier,
+      word:PRAISE[tier], col:PRAISE_COL[tier], sub:"+"+gained});
   }
   function updateFx(dt){
     const k=dt/16.7;
@@ -600,7 +607,8 @@
       p.x+=p.vx*k; p.y+=p.vy*k; p.vy+=CELL*0.018*k; p.life-=0.035*k;
       if(p.life<=0) particles.splice(i,1); }
     for(let i=popups.length-1;i>=0;i--){ const q=popups[i];
-      q.y-=CELL*0.03*k; q.life-=0.02*k; if(q.life<=0) popups.splice(i,1); }
+      q.age+=dt; q.y-=CELL*0.03*k; q.life-=0.02*k; if(q.life<=0) popups.splice(i,1); }
+    if(rotT>0) rotT=Math.max(0,rotT-dt);   // 旋转动画计时
     for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
       if(voff[r][c]!==0){
         if(vmode[r][c]===1){ voff[r][c]+=JUNK_FALL*dt; if(voff[r][c]>=0){ voff[r][c]=0; vmode[r][c]=0; } } // 乱入:匀速缓降
@@ -619,6 +627,7 @@
   }
 
   // ---------- 渲染 ----------
+  function easeOutBack(t){ const c1=1.70158, c3=c1+1; return 1+c3*Math.pow(t-1,3)+c1*Math.pow(t-1,2); }
   function rr(g,x,y,w,h,rad){ g.beginPath(); g.moveTo(x+rad,y);
     g.arcTo(x+w,y,x+w,y+h,rad); g.arcTo(x+w,y+h,x,y+h,rad);
     g.arcTo(x,y+h,x,y,rad); g.arcTo(x,y,x+w,y,rad); g.closePath(); }
@@ -670,19 +679,33 @@
     if(state==="playing"&&current&&sub==="control"){
       // visRow/visCol 由 updateFx 连续插值,这里只负责画
       if(ghostOn){ const gr=ghostRow(); for(let i=0;i<current.colors.length;i++){ const r=gr+i; if(r>=0) drawBlock(ctx,current.col,r,current.colors[i],{ghost:true}); } }
-      for(let i=0;i<current.colors.length;i++) drawBlock(ctx,visCol,visRow+i,current.colors[i],{glow:1.1});
+      const n=current.colors.length;
+      if(rotT>0){   // 旋转:色块整体下移一格、底色从上方卷入(看得见在"转")
+        const t=1-rotT/ROT_MS, e=1-Math.pow(1-t,3);
+        for(let i=1;i<n;i++) drawBlock(ctx,visCol,visRow+(i-1)+e,current.colors[i],{});
+        drawBlock(ctx,visCol,visRow+(-1+e),current.colors[0],{alpha:e});      // 从上方淡入
+        drawBlock(ctx,visCol,visRow+(n-1)+e,current.colors[0],{alpha:1-e});   // 向下淡出
+      } else {
+        for(let i=0;i<n;i++) drawBlock(ctx,visCol,visRow+i,current.colors[i],{});
+      }
     }
 
     for(const p of particles){ ctx.save(); ctx.globalAlpha=Math.max(0,p.life)*0.9;
       ctx.fillStyle=p.color;
       ctx.beginPath(); ctx.arc(p.x,p.y,p.size*Math.max(0,p.life),0,7); ctx.fill(); ctx.restore(); }
 
-    for(const q of popups){ ctx.save(); ctx.globalAlpha=Math.max(0,q.life);
-      ctx.textAlign="center"; ctx.shadowColor="#29c5ff"; ctx.shadowBlur=14;
-      ctx.fillStyle="#fff"; ctx.font="900 "+Math.round(CELL*0.6)+"px system-ui,sans-serif";
-      ctx.fillText(q.text,q.x,q.y);
-      if(q.sub){ ctx.shadowColor="#ff3df5"; ctx.fillStyle="#ffb0f4";
-        ctx.font="800 "+Math.round(CELL*0.42)+"px system-ui,sans-serif"; ctx.fillText(q.sub,q.x,q.y+CELL*0.6); }
+    for(const q of popups){
+      const a=Math.min(1,q.age/180), sc=0.35+0.65*easeOutBack(a);   // 弹一下:0.35→过冲→1
+      ctx.save(); ctx.globalAlpha=Math.max(0,q.life);
+      ctx.textAlign="center"; ctx.textBaseline="middle";
+      ctx.translate(q.x,q.y); ctx.scale(sc,sc);
+      const fs=Math.round(CELL*(0.62+q.tier*0.08));                 // 连击越高字越大
+      ctx.font="900 "+fs+"px system-ui,sans-serif";                 // 夸奖词:描边+实色(无辉光)
+      ctx.lineWidth=Math.max(3,CELL*0.1); ctx.strokeStyle="rgba(8,2,20,.92)"; ctx.strokeText(q.word,0,0);
+      ctx.fillStyle=q.col; ctx.fillText(q.word,0,0);
+      ctx.font="800 "+Math.round(CELL*0.4)+"px system-ui,sans-serif"; // +分
+      ctx.lineWidth=Math.max(2,CELL*0.07); ctx.strokeStyle="rgba(8,2,20,.92)"; ctx.strokeText(q.sub,0,fs*0.8);
+      ctx.fillStyle="#fff"; ctx.fillText(q.sub,0,fs*0.8);
       ctx.restore(); }
 
     // 移动端:画布内显示「下一个」(侧栏已隐藏)
@@ -715,6 +738,7 @@
   let last=0;
   function loop(t){
     const dt=Math.min(60,t-(last||t)); last=t;
+    if(freezeT>0){ freezeT=Math.max(0,freezeT-dt); render(); requestAnimationFrame(loop); return; }  // 顿帧:全局短暂定格
     if(state==="playing"){
       if(sub==="control"){
         dropAccum+=dt; const iv=softDrop?Math.min(55,dropInterval):dropInterval;
