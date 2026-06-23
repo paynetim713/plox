@@ -205,14 +205,21 @@
 
   // ---------- 配置 ----------
   const COLS = 7, ROWS = 14;
-  const COLORS = [   // 柔和宝石色,不刺眼
-    {fill:"#d65ba8", glow:"#e9a8d0"}, // 粉
-    {fill:"#57b585", glow:"#a4dabd"}, // 绿
-    {fill:"#4f9dcf", glow:"#a8d2eb"}, // 蓝
-    {fill:"#d8ad55", glow:"#ebd5a4"}, // 黄
-    {fill:"#d6685b", glow:"#e9a69e"}, // 红
-    {fill:"#9379cb", glow:"#c2b3e6"}, // 紫
+  const COLORS = [   // 实色 + 实线边框(glow=边框色)。前 5 个为实际使用;粉=品红、红=橙红,刻意拉开区分
+    {fill:"#e25fb2", glow:"#f3acd8"}, // 粉(品红/桃红,更亮)
+    {fill:"#d8ad55", glow:"#ecd6a4"}, // 黄
+    {fill:"#5cb35a", glow:"#a8dba6"}, // 绿
+    {fill:"#5a86d8", glow:"#aec2f0"}, // 蓝
+    {fill:"#d9513a", glow:"#ec9a8a"}, // 红(橙红,更深)
+    {fill:"#9b73d0", glow:"#c9b4ec"}, // 紫(备用第6色)
   ];
+  // 由本色推导明暗,做立体光泽(不用发光光晕,久看不累)
+  function shade(hex, amt){
+    const n=parseInt(hex.slice(1),16), R=(n>>16)&255, G=(n>>8)&255, B=n&255;
+    const f=t=> amt>=0 ? Math.round(t+(255-t)*amt) : Math.round(t*(1+amt));
+    return "rgb("+f(R)+","+f(G)+","+f(B)+")";
+  }
+  COLORS.forEach(c=>{ c.top=shade(c.fill,.16); c.dark=shade(c.fill,-.2); c.edge=shade(c.fill,-.34); });
   // 每组固定 3 个随机色块,玩家方块下落速度统一不变。
   // 难度 = 系统「随机乱入」一组(玩家无法操作)方块组的频率:简单很少、普通适中、困难频繁。
   // junkMin/junkMax = 每隔多少个玩家方块,乱入一波(1~2 组)。数字越小越频繁越难。
@@ -617,20 +624,23 @@
 
   function drawBlock(g, colF, rowF, idx, opt, cell){
     cell=cell||CELL; opt=opt||{};
-    const sc=opt.scale||1, p=Math.max(2,cell*0.07), s=(cell-p*2)*sc;
+    const sc=opt.scale||1, p=Math.max(2,cell*0.06), s=(cell-p*2)*sc;
     const cx=(colF+0.5)*cell, cy=(rowF+0.5)*cell, x=cx-s/2, y=cy-s/2;
     const col=COLORS[idx]||COLORS[0];
-    const rad=cell*0.16;
+    const rad=cell*0.2;
     g.save();
-    if(opt.ghost){ // 落点:淡实色填充 + 实线边框(无辉光)
-      g.globalAlpha=.32; g.fillStyle=col.fill; rr(g,x,y,s,s,rad); g.fill();
-      g.globalAlpha=.85; g.strokeStyle=col.glow; g.lineWidth=Math.max(2,cell*0.07);
+    if(opt.ghost){ // 落点:淡填充 + 描边(无辉光)
+      g.globalAlpha=.3; g.fillStyle=col.fill; rr(g,x,y,s,s,rad); g.fill();
+      g.globalAlpha=.8; g.strokeStyle=col.glow; g.lineWidth=Math.max(2,cell*0.06);
       rr(g,x,y,s,s,rad); g.stroke(); g.restore(); return; }
-    // 纯实色方块 + 实线边框,完全无光晕(久看不累)
-    g.fillStyle=col.fill; if(opt.alpha!=null) g.globalAlpha=opt.alpha;
-    rr(g,x,y,s,s,rad); g.fill();
-    g.globalAlpha=(opt.alpha!=null?opt.alpha:1);
-    g.strokeStyle=col.glow; g.lineWidth=Math.max(1.5,cell*0.05);
+    const a=(opt.alpha!=null)?opt.alpha:1;
+    // 立体渐变(亮顶→本色→暗底)+ 顶部光泽 + 干净描边,无发光光晕
+    const grad=g.createLinearGradient(x,y,x,y+s);
+    grad.addColorStop(0,col.top); grad.addColorStop(.52,col.fill); grad.addColorStop(1,col.dark);
+    g.globalAlpha=a; g.fillStyle=grad; rr(g,x,y,s,s,rad); g.fill();
+    g.globalAlpha=a*0.5; g.fillStyle=col.glow;                       // 顶部柔和光泽条
+    rr(g, x+s*0.13, y+s*0.09, s*0.74, s*0.2, rad*0.6); g.fill();
+    g.globalAlpha=a; g.strokeStyle=col.edge; g.lineWidth=Math.max(1,cell*0.035);
     rr(g,x,y,s,s,rad); g.stroke();
     g.restore();
   }
