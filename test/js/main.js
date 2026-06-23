@@ -58,10 +58,20 @@ import { COLS, ROWS, COLORS, FIXED_COLORS, PIECE_LEN, PLAYER_INTERVAL, JUNK_FALL
     cv.width=COLS*CELL*dpr; cv.height=ROWS*CELL*dpr;
     cv.style.width=COLS*CELL+"px"; cv.style.height=ROWS*CELL+"px";
     ctx.setTransform(dpr,0,0,dpr,0,0);
+    rebuildGradients();   // CELL 变了才重建缓存渐变(避免每帧每块新建)
     if(next && !isMobile) drawNext();   // 「下一个」预览按当前块数自适应(移动端用画布内预览)
     render();
   }
   window.addEventListener("resize", resize);
+  // 缓存:每色一个方块渐变(本地居中坐标)+ 背景渐变;仅 resize 时重建
+  let gradCache=[], bgGrad=null;
+  function rebuildGradients(){
+    const p0=Math.max(2,CELL*0.06), H0=(CELL-p0*2)/2;
+    gradCache=COLORS.map(col=>{ const gr=ctx.createLinearGradient(0,-H0,0,H0);
+      gr.addColorStop(0,col.top); gr.addColorStop(.52,col.fill); gr.addColorStop(1,col.dark); return gr; });
+    bgGrad=ctx.createLinearGradient(0,0,0,ROWS*CELL);
+    bgGrad.addColorStop(0,"#120428"); bgGrad.addColorStop(1,"#070114");
+  }
   window.addEventListener("orientationchange", ()=>setTimeout(resize,150));
   // 全屏 App 启动时布局/安全区可能晚一拍到位,补量几次
   window.addEventListener("load", ()=>{ resize(); setTimeout(resize,300); });
@@ -408,24 +418,26 @@ import { COLS, ROWS, COLORS, FIXED_COLORS, PIECE_LEN, PLAYER_INTERVAL, JUNK_FALL
 
   function drawBlock(g, colF, rowF, idx, opt, cell){
     cell=cell||CELL; opt=opt||{};
-    const sc=opt.scale||1, p=Math.max(2,cell*0.06), s=(cell-p*2)*sc;
-    const cx=(colF+0.5)*cell, cy=(rowF+0.5)*cell, x=cx-s/2, y=cy-s/2;
+    const sc=opt.scale||1, p=Math.max(2,cell*0.06), s0=cell-p*2, h=s0/2;
+    const cx=(colF+0.5)*cell, cy=(rowF+0.5)*cell;
     const col=COLORS[idx]||COLORS[0];
     const rad=cell*0.2;
     g.save();
+    g.translate(cx,cy); if(sc!==1) g.scale(sc,sc);   // 居中绘制 → 可复用缓存渐变、缩放也对
     if(opt.ghost){ // 落点:实心,只是比真方块暗一些(好分辨)
-      g.fillStyle=col.gfill; rr(g,x,y,s,s,rad); g.fill();
+      g.fillStyle=col.gfill; rr(g,-h,-h,s0,s0,rad); g.fill();
       g.strokeStyle=col.gedge; g.lineWidth=Math.max(1.5,cell*0.045);
-      rr(g,x,y,s,s,rad); g.stroke(); g.restore(); return; }
+      rr(g,-h,-h,s0,s0,rad); g.stroke(); g.restore(); return; }
     const a=(opt.alpha!=null)?opt.alpha:1;
-    // 立体渐变(亮顶→本色→暗底)+ 顶部光泽 + 干净描边,无发光光晕
-    const grad=g.createLinearGradient(x,y,x,y+s);
-    grad.addColorStop(0,col.top); grad.addColorStop(.52,col.fill); grad.addColorStop(1,col.dark);
-    g.globalAlpha=a; g.fillStyle=grad; rr(g,x,y,s,s,rad); g.fill();
+    let grad;   // 棋盘热路径用缓存渐变;预览等少量块即时生成
+    if(g===ctx && cell===CELL){ grad=gradCache[idx]; }
+    else { grad=g.createLinearGradient(0,-h,0,h);
+      grad.addColorStop(0,col.top); grad.addColorStop(.52,col.fill); grad.addColorStop(1,col.dark); }
+    g.globalAlpha=a; g.fillStyle=grad; rr(g,-h,-h,s0,s0,rad); g.fill();
     g.globalAlpha=a*0.5; g.fillStyle=col.glow;                       // 顶部柔和光泽条
-    rr(g, x+s*0.13, y+s*0.09, s*0.74, s*0.2, rad*0.6); g.fill();
+    rr(g, -h+s0*0.13, -h+s0*0.09, s0*0.74, s0*0.2, rad*0.6); g.fill();
     g.globalAlpha=a; g.strokeStyle=col.edge; g.lineWidth=Math.max(1,cell*0.035);
-    rr(g,x,y,s,s,rad); g.stroke();
+    rr(g,-h,-h,s0,s0,rad); g.stroke();
     g.restore();
   }
 
@@ -433,9 +445,7 @@ import { COLS, ROWS, COLORS, FIXED_COLORS, PIECE_LEN, PLAYER_INTERVAL, JUNK_FALL
     let ox=0,oy=0;
     if(shakeT>0){ const m=shakeT/460*1.5; ox=(Math.random()*2-1)*m; oy=(Math.random()*2-1)*m; }
     ctx.save(); ctx.clearRect(0,0,cv.width,cv.height); ctx.translate(ox,oy);
-    const bg=ctx.createLinearGradient(0,0,0,ROWS*CELL);
-    bg.addColorStop(0,"#120428"); bg.addColorStop(1,"#070114");
-    ctx.fillStyle=bg; ctx.fillRect(-4,-4,COLS*CELL+8,ROWS*CELL+8);
+    ctx.fillStyle=bgGrad||"#0a0118"; ctx.fillRect(-4,-4,COLS*CELL+8,ROWS*CELL+8);
     ctx.strokeStyle="rgba(150,90,255,.10)"; ctx.lineWidth=1;
     for(let c=0;c<=COLS;c++){ ctx.beginPath(); ctx.moveTo(c*CELL,0); ctx.lineTo(c*CELL,ROWS*CELL); ctx.stroke(); }
     for(let r=0;r<=ROWS;r++){ ctx.beginPath(); ctx.moveTo(0,r*CELL); ctx.lineTo(COLS*CELL,r*CELL); ctx.stroke(); }

@@ -1,0 +1,14 @@
+{
+  "name": "PLOX · 单机版",
+  "short_name": "PLOX",
+  "description": "经典街机消除游戏 Plox 的单人复刻版",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0a0118",
+  "theme_color": "#0a0118",
+  "icons": [
+    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
