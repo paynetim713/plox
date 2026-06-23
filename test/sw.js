@@ -1,5 +1,5 @@
 // PLOX service worker — 网络优先,离线回退(保证更新能及时推送给玩家)
-const CACHE = "plox-v4";
+const CACHE = "plox-v5";
 const ASSETS = ["./", "./index.html", "./manifest.json", "./icon.svg",
   "./css/styles.css", "./js/main.js", "./js/config.js"];
 

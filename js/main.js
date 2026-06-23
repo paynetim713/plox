@@ -22,6 +22,7 @@ import { COLS, ROWS, COLORS, FIXED_COLORS, PIECE_LEN, PLAYER_INTERVAL, JUNK_FALL
   let score=0, cleared=0, level=1, combo=0, maxCombo=0;
   let dropAccum=0, dropInterval=800, baseInterval=720, colorCount=5, pieceLen=3, softDrop=false;
   let junkMin=3, junkMax=4, pieceUntilJunk=4, justJunked=false;   // 难度:随机乱入方块组
+  let fallingJunk=[];   // 乱入方块作为独立下落实体(落地才算进棋盘 → 逻辑与画面同步)
   let clearing=null, clearTimer=0, flashPulse=0;
   let visRow=0, visCol=3, shakeT=0, rotT=0, freezeT=0;
   let high=0;   // 当前难度的个人最高分(各难度分开记)
@@ -58,10 +59,20 @@ import { COLS, ROWS, COLORS, FIXED_COLORS, PIECE_LEN, PLAYER_INTERVAL, JUNK_FALL
     cv.width=COLS*CELL*dpr; cv.height=ROWS*CELL*dpr;
     cv.style.width=COLS*CELL+"px"; cv.style.height=ROWS*CELL+"px";
     ctx.setTransform(dpr,0,0,dpr,0,0);
+    rebuildGradients();   // CELL 变了才重建缓存渐变(避免每帧每块新建)
     if(next && !isMobile) drawNext();   // 「下一个」预览按当前块数自适应(移动端用画布内预览)
     render();
   }
   window.addEventListener("resize", resize);
+  // 缓存:每色一个方块渐变(本地居中坐标)+ 背景渐变;仅 resize 时重建
+  let gradCache=[], bgGrad=null;
+  function rebuildGradients(){
+    const p0=Math.max(2,CELL*0.06), H0=(CELL-p0*2)/2;
+    gradCache=COLORS.map(col=>{ const gr=ctx.createLinearGradient(0,-H0,0,H0);
+      gr.addColorStop(0,col.top); gr.addColorStop(.52,col.fill); gr.addColorStop(1,col.dark); return gr; });
+    bgGrad=ctx.createLinearGradient(0,0,0,ROWS*CELL);
+    bgGrad.addColorStop(0,"#120428"); bgGrad.addColorStop(1,"#070114");
+  }
   window.addEventListener("orientationchange", ()=>setTimeout(resize,150));
   // 全屏 App 启动时布局/安全区可能晚一拍到位,补量几次
   window.addEventListener("load", ()=>{ resize(); setTimeout(resize,300); });
@@ -89,7 +100,7 @@ import { COLS, ROWS, COLORS, FIXED_COLORS, PIECE_LEN, PLAYER_INTERVAL, JUNK_FALL
     junkMin=DIFFS[diffKey].junkMin; junkMax=DIFFS[diffKey].junkMax;
     pieceUntilJunk=randInt(junkMin,junkMax); justJunked=false;
     dropInterval=baseInterval; dropAccum=0; softDrop=false; clearing=null; sub="control";
-    shakeT=0; particles.length=0; popups.length=0;
+    shakeT=0; particles.length=0; popups.length=0; fallingJunk.length=0;
     refreshHigh();   // HUD「最高」显示当前难度的个人最高
     next=newPiece(); spawn(); syncHUD();
   }
@@ -322,32 +333,38 @@ import { COLS, ROWS, COLORS, FIXED_COLORS, PIECE_LEN, PLAYER_INTERVAL, JUNK_FALL
     clearing=null; gravity(); beginResolve();
   }
 
-  // 板面完全静止后:按难度频率「乱入」无法操作的方块组,再生成下一个玩家方块
+  // 板面静止后:按难度频率「乱入」独立下落的方块,再立刻生成下一个玩家方块(两者并行下落)
   function settle(){
     if(state!=="playing") return;
-    if(!justJunked && --pieceUntilJunk<=0){
-      pieceUntilJunk=randInt(junkMin,junkMax); justJunked=true;
-      const ov=dropJunk();
-      if(ov.overflow){ gameOver(); return; }
-      if(ov.added>0){ combo=0; sub="resolving"; beginResolve(); return; } // 处理乱入产生的消除
-    }
-    justJunked=false; sub="control"; spawn();
+    if(--pieceUntilJunk<=0){ pieceUntilJunk=randInt(junkMin,junkMax); dropJunk(); }
+    sub="control"; spawn();
   }
 
-  // 随机「乱入」1~2 个单独方块(各落到一个随机列的堆顶),玩家无法操作,从顶部匀速缓降
+  // 乱入:在 1~2 个随机列顶部上方生成独立下落实体(不立刻占棋盘;落地逻辑见 updateFx)
   function dropJunk(){
     const n=Math.random()<0.6?1:2;   // 多数只乱入 1 个,偶尔 2 个
     const avail=[]; for(let c=0;c<COLS;c++) avail.push(c);
-    let added=0, overflow=false;
+    let added=0;
     for(let i=0;i<n && avail.length;i++){
       const c=avail.splice((Math.random()*avail.length)|0,1)[0];
-      let top=0; while(top<ROWS && board[top][c]==null) top++;   // 该列最高已填行
-      const r=top-1;                                            // 落在堆顶之上一格
-      if(r<0){ overflow=true; break; }
-      board[r][c]=rc(); voff[r][c]=-Math.min(top,7); vmode[r][c]=1; vscale[r][c]=1; added++;
+      fallingJunk.push({c, y:-1.6, idx:rc()});   // 从顶部上方开始匀速缓降
+      added++;
     }
-    if(added){ beep(150,.08,"square",.07); shakeT=Math.min(110, 50+added*15); }
-    return {added, overflow};
+    if(added) beep(150,.07,"square",.05);
+    return {added};
+  }
+
+  // 乱入方块落地后,清掉它造成的消除(不打断玩家正在操作的方块;即时清除 + 粒子反馈)
+  function resolveJunk(){
+    let total=0;
+    while(true){ const m=findMatches(); if(m.size===0) break;
+      total+=m.size;
+      for(const key of m){ const [r,c]=key.split(",").map(Number);
+        spawnParticles(c,r,board[r][c]); board[r][c]=null; voff[r][c]=0; vmode[r][c]=0; vscale[r][c]=1; }
+      gravity();
+    }
+    if(total){ score+=total*10; cleared+=total; syncHUD();
+      shakeT=Math.min(180,60+total*16); beep(520,.1,"triangle",.1); }
   }
 
   // ---------- 操作 ----------
@@ -390,6 +407,22 @@ import { COLS, ROWS, COLORS, FIXED_COLORS, PIECE_LEN, PLAYER_INTERVAL, JUNK_FALL
       }
       if(vscale[r][c]!==1){ vscale[r][c]+=(1-vscale[r][c])*Math.min(1,0.22*k); if(Math.abs(vscale[r][c]-1)<0.01) vscale[r][c]=1; }
     }
+    // 乱入实体:匀速缓降,落到该列堆顶即"落地"(并入棋盘 + 处理消除);只在控制阶段推进
+    if(state==="playing" && sub==="control"){
+      for(let i=fallingJunk.length-1;i>=0;i--){
+        const j=fallingJunk[i];
+        j.y += JUNK_FALL*dt;
+        let top=0; while(top<ROWS && board[top][j.c]==null) top++;   // 该列最高已填行
+        const R=top-1;                                              // 落点
+        if(R<0){ fallingJunk.length=0; gameOver(); return; }        // 该列已满 → 顶出,结束
+        if(j.y>=R){
+          board[R][j.c]=j.idx; vscale[R][j.c]=1.3;   // 落地小弹
+          fallingJunk.splice(i,1);
+          beep(150,.06,"square",.06);
+          resolveJunk();
+        }
+      }
+    }
     // 玩家方块:连续平滑下落(消除"跳一格/掉帧"的卡顿感)
     if(state==="playing" && current && sub==="control"){
       const iv = softDrop ? Math.min(55,dropInterval) : dropInterval;
@@ -408,24 +441,26 @@ import { COLS, ROWS, COLORS, FIXED_COLORS, PIECE_LEN, PLAYER_INTERVAL, JUNK_FALL
 
   function drawBlock(g, colF, rowF, idx, opt, cell){
     cell=cell||CELL; opt=opt||{};
-    const sc=opt.scale||1, p=Math.max(2,cell*0.06), s=(cell-p*2)*sc;
-    const cx=(colF+0.5)*cell, cy=(rowF+0.5)*cell, x=cx-s/2, y=cy-s/2;
+    const sc=opt.scale||1, p=Math.max(2,cell*0.06), s0=cell-p*2, h=s0/2;
+    const cx=(colF+0.5)*cell, cy=(rowF+0.5)*cell;
     const col=COLORS[idx]||COLORS[0];
     const rad=cell*0.2;
     g.save();
+    g.translate(cx,cy); if(sc!==1) g.scale(sc,sc);   // 居中绘制 → 可复用缓存渐变、缩放也对
     if(opt.ghost){ // 落点:实心,只是比真方块暗一些(好分辨)
-      g.fillStyle=col.gfill; rr(g,x,y,s,s,rad); g.fill();
+      g.fillStyle=col.gfill; rr(g,-h,-h,s0,s0,rad); g.fill();
       g.strokeStyle=col.gedge; g.lineWidth=Math.max(1.5,cell*0.045);
-      rr(g,x,y,s,s,rad); g.stroke(); g.restore(); return; }
+      rr(g,-h,-h,s0,s0,rad); g.stroke(); g.restore(); return; }
     const a=(opt.alpha!=null)?opt.alpha:1;
-    // 立体渐变(亮顶→本色→暗底)+ 顶部光泽 + 干净描边,无发光光晕
-    const grad=g.createLinearGradient(x,y,x,y+s);
-    grad.addColorStop(0,col.top); grad.addColorStop(.52,col.fill); grad.addColorStop(1,col.dark);
-    g.globalAlpha=a; g.fillStyle=grad; rr(g,x,y,s,s,rad); g.fill();
+    let grad;   // 棋盘热路径用缓存渐变;预览等少量块即时生成
+    if(g===ctx && cell===CELL){ grad=gradCache[idx]; }
+    else { grad=g.createLinearGradient(0,-h,0,h);
+      grad.addColorStop(0,col.top); grad.addColorStop(.52,col.fill); grad.addColorStop(1,col.dark); }
+    g.globalAlpha=a; g.fillStyle=grad; rr(g,-h,-h,s0,s0,rad); g.fill();
     g.globalAlpha=a*0.5; g.fillStyle=col.glow;                       // 顶部柔和光泽条
-    rr(g, x+s*0.13, y+s*0.09, s*0.74, s*0.2, rad*0.6); g.fill();
+    rr(g, -h+s0*0.13, -h+s0*0.09, s0*0.74, s0*0.2, rad*0.6); g.fill();
     g.globalAlpha=a; g.strokeStyle=col.edge; g.lineWidth=Math.max(1,cell*0.035);
-    rr(g,x,y,s,s,rad); g.stroke();
+    rr(g,-h,-h,s0,s0,rad); g.stroke();
     g.restore();
   }
 
@@ -433,9 +468,7 @@ import { COLS, ROWS, COLORS, FIXED_COLORS, PIECE_LEN, PLAYER_INTERVAL, JUNK_FALL
     let ox=0,oy=0;
     if(shakeT>0){ const m=shakeT/460*1.5; ox=(Math.random()*2-1)*m; oy=(Math.random()*2-1)*m; }
     ctx.save(); ctx.clearRect(0,0,cv.width,cv.height); ctx.translate(ox,oy);
-    const bg=ctx.createLinearGradient(0,0,0,ROWS*CELL);
-    bg.addColorStop(0,"#120428"); bg.addColorStop(1,"#070114");
-    ctx.fillStyle=bg; ctx.fillRect(-4,-4,COLS*CELL+8,ROWS*CELL+8);
+    ctx.fillStyle=bgGrad||"#0a0118"; ctx.fillRect(-4,-4,COLS*CELL+8,ROWS*CELL+8);
     ctx.strokeStyle="rgba(150,90,255,.10)"; ctx.lineWidth=1;
     for(let c=0;c<=COLS;c++){ ctx.beginPath(); ctx.moveTo(c*CELL,0); ctx.lineTo(c*CELL,ROWS*CELL); ctx.stroke(); }
     for(let r=0;r<=ROWS;r++){ ctx.beginPath(); ctx.moveTo(0,r*CELL); ctx.lineTo(COLS*CELL,r*CELL); ctx.stroke(); }
@@ -449,6 +482,9 @@ import { COLS, ROWS, COLORS, FIXED_COLORS, PIECE_LEN, PLAYER_INTERVAL, JUNK_FALL
         const p=Math.max(2,CELL*0.07); rr(ctx,c*CELL+p,ry*CELL+p,CELL-p*2,CELL-p*2,CELL*0.18); ctx.fill(); ctx.restore();
       } else drawBlock(ctx,c,ry,board[r][c],{scale:vscale[r][c]});
     }
+
+    // 乱入下落实体(独立于棋盘)
+    for(const j of fallingJunk){ if(j.y>-1) drawBlock(ctx, j.c, j.y, j.idx, {}); }
 
     if(state==="playing"&&current&&sub==="control"){
       // visRow/visCol 由 updateFx 连续插值,这里只负责画
@@ -511,9 +547,10 @@ import { COLS, ROWS, COLORS, FIXED_COLORS, PIECE_LEN, PLAYER_INTERVAL, JUNK_FALL
   }
 
   // ---------- 主循环 ----------
-  let last=0;
+  let last=0, _lastState="";
   function loop(t){
     const dt=Math.min(60,t-(last||t)); last=t;
+    if(state!==_lastState){ _lastState=state; document.body.classList.toggle("ingame", state==="playing"); }  // 暂停键只在进行中显示
     if(freezeT>0){ freezeT=Math.max(0,freezeT-dt); render(); requestAnimationFrame(loop); return; }  // 顿帧:全局短暂定格
     if(state==="playing"){
       if(sub==="control"){
@@ -703,6 +740,7 @@ import { COLS, ROWS, COLORS, FIXED_COLORS, PIECE_LEN, PLAYER_INTERVAL, JUNK_FALL
     else if(act==="menu"){ closeSettings(false); stopMusic(); showMenu(); }
   }
   $("gearBtn").addEventListener("click", openSettings);
+  $("pauseBtn").addEventListener("click", togglePause);   // 顶部独立暂停键
 
   // ---------- 启动 ----------
   board=Array.from({length:ROWS},()=>Array(COLS).fill(null));
@@ -721,7 +759,9 @@ import { COLS, ROWS, COLORS, FIXED_COLORS, PIECE_LEN, PLAYER_INTERVAL, JUNK_FALL
       stats:()=>({ filled: board.reduce((a,row)=>a+row.filter(x=>x!=null).length,0),
         perCol: Array.from({length:COLS},(_,c)=>{let n=0;for(let r=0;r<ROWS;r++)if(board[r][c]!=null)n++;return n;}),
         pieceUntilJunk, justJunked, junkMin, junkMax, sub, state, diffKey }),
-      forceJunk:()=>dropJunk()
+      forceJunk:()=>dropJunk(),
+      falling:()=>fallingJunk.map(j=>({c:j.c,y:Math.round(j.y*100)/100})),
+      tick:(ms)=>updateFx(ms||16)
     };
   }
 
