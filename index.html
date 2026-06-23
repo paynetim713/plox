@@ -681,13 +681,11 @@
       // visRow/visCol 由 updateFx 连续插值,这里只负责画
       if(ghostOn){ const gr=ghostRow(); for(let i=0;i<current.colors.length;i++){ const r=gr+i; if(r>=0) drawBlock(ctx,current.col,r,current.colors[i],{ghost:true}); } }
       const n=current.colors.length;
-      if(rotT>0){   // 旋转:在这3格窗口内整体下滚一格,底色从顶边滑入(窗口外裁掉,无幽灵块)
-        const t=1-rotT/ROT_MS, e=1-Math.pow(1-t,3);
-        ctx.save();
-        ctx.beginPath(); ctx.rect(visCol*CELL, visRow*CELL, CELL, n*CELL); ctx.clip();
-        for(let i=1;i<n;i++) drawBlock(ctx,visCol,visRow+(i-1)+e,current.colors[i],{});  // A,B 下滑
-        drawBlock(ctx,visCol,visRow+(-1+e),current.colors[0],{});   // 底色从顶边滑入
-        drawBlock(ctx,visCol,visRow+(n-1)+e,current.colors[0],{});  // 旧底色滑出底边(被裁)
+      if(rotT>0){   // 旋转:整组干净"弹一下"(放大回弹),不滑动、不重影
+        const t=1-rotT/ROT_MS, pop=1+0.15*Math.sin(t*Math.PI);
+        const cx=(visCol+0.5)*CELL, cyc=(visRow+n/2)*CELL;
+        ctx.save(); ctx.translate(cx,cyc); ctx.scale(pop,pop); ctx.translate(-cx,-cyc);
+        for(let i=0;i<n;i++) drawBlock(ctx,visCol,visRow+i,current.colors[i],{});
         ctx.restore();
       } else {
         for(let i=0;i<n;i++) drawBlock(ctx,visCol,visRow+i,current.colors[i],{});
