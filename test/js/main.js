@@ -142,23 +142,45 @@ import { ITEMS, ITEM_LIST, getItem, addItem, useItem, ownedItems } from "./items
     if(!valid(current.row,current.col,current.colors)){ gameOver(); return; }
     if(!isMobile) drawNext();
   }
+  // ---------- 图标(纯图形,无 emoji)----------
+  const ICON = {
+    play:'<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5 L20 12 L8 19 Z" fill="currentColor"/></svg>',
+    cart:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 3 h3 l2.4 12 h11 l2.2 -8.5 H6.4"/><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/></svg>',
+    trophy:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3 h10 v5 a5 5 0 0 1 -10 0 z"/><path d="M7 4 H4 a2.5 2.5 0 0 0 3 4.2"/><path d="M17 4 h3 a2.5 2.5 0 0 1 -3 4.2"/><path d="M12 13 v3 M8.5 20 h7 M9.5 20 l.7 -4 M14.5 20 l-.7 -4"/></svg>',
+    star:'<svg class="starIc" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 l2.6 5.3 5.8 .85 -4.2 4.1 1 5.75 -5.2 -2.73 -5.2 2.73 1 -5.75 -4.2 -4.1 5.8 -.85 z" fill="currentColor"/></svg>',
+    gem:'<div class="gemMark"><i class="g gMag"></i><i class="g gCya"></i><i class="g gGrn"></i><i class="g gPur"></i></div>',
+  };
+  const DIFF_INT = {easy:1, normal:2, hard:3};
+  const nfmt = n => (+n||0).toLocaleString();
+  function diffCardHTML(k){
+    const bars=[0,1,2].map(i=>'<i class="'+(i<DIFF_INT[k]?'on':'')+'"></i>').join('');
+    return '<button class="diffCard'+(k===diffKey?' on':'')+'" data-k="'+k+'">'+
+      '<div class="dcLabel">'+DIFFS[k].label+'</div>'+
+      '<div class="dcBars">'+bars+'</div>'+
+      '<div class="dcBest">最高 '+nfmt(getBest(k))+'</div></button>';
+  }
   function showMenu(){
     state="start"; refreshHigh();
     overlay.innerHTML =
-      '<div class="logoWrap"><div class="logo">PLOX</div><div class="logoSub">霓 虹 消 除</div></div>'+
-      '<div class="segWrap">'+
-        '<div class="seg">'+segBtn("easy")+segBtn("normal")+segBtn("hard")+'</div>'+
-        '<div class="segHint" id="segHint">'+DIFFS[diffKey].sub+'</div>'+
-      '</div>'+
-      '<button class="play" id="playBtn">开 始</button>'+
-      '<div class="link" id="shopLink">商店</div>'+
-      '<div class="link" id="lbLink">排行榜</div>';
+      '<div class="menu">'+
+        '<div class="menuAmb"><i></i><i></i><i></i><i></i></div>'+
+        '<div class="menuHero">'+ICON.gem+
+          '<div class="logo">PLOX</div><div class="logoSub">霓 虹 消 除</div></div>'+
+        '<div class="bestRibbon">'+ICON.star+'<span>本难度最高</span><b id="bestVal">'+nfmt(getBest(diffKey))+'</b></div>'+
+        '<div class="diffCards">'+diffCardHTML("easy")+diffCardHTML("normal")+diffCardHTML("hard")+'</div>'+
+        '<button class="playBtn" id="playBtn">'+ICON.play+'<span>开始</span></button>'+
+        '<div class="menuActions">'+
+          '<button class="actBtn shop" id="shopLink">'+ICON.cart+'<span>商店</span></button>'+
+          '<button class="actBtn lb" id="lbLink">'+ICON.trophy+'<span>排行榜</span></button>'+
+        '</div>'+
+        '<div class="menuFoot">全球排行榜 · 离线可玩 · 闯关攒金币</div>'+
+      '</div>';
     overlay.classList.remove("hidden");
     syncCoins();
-    [...overlay.querySelectorAll(".seg b")].forEach(b=>b.addEventListener("click",()=>{
+    [...overlay.querySelectorAll(".diffCard")].forEach(b=>b.addEventListener("click",()=>{
       diffKey=b.dataset.k;
-      [...overlay.querySelectorAll(".seg b")].forEach(x=>x.classList.toggle("on",x.dataset.k===diffKey));
-      $("segHint").textContent=DIFFS[diffKey].sub; refreshHigh();
+      [...overlay.querySelectorAll(".diffCard")].forEach(x=>x.classList.toggle("on",x.dataset.k===diffKey));
+      refreshHigh(); const bv=$("bestVal"); if(bv) bv.textContent=nfmt(getBest(diffKey));
     }));
     $("playBtn").addEventListener("click", start);
     $("shopLink").addEventListener("click", ()=>showShop());
@@ -192,7 +214,6 @@ import { ITEMS, ITEM_LIST, getItem, addItem, useItem, ownedItems } from "./items
     });
     $("shopBack").addEventListener("click", ()=>showMenu());
   }
-  const segBtn=k=>'<b class="'+(k===diffKey?'on':'')+'" data-k="'+k+'">'+DIFFS[k].label+'</b>';
 
   // ---------- 排行榜:本机持久化 + 全球共享 ----------
   const LB_KEY="plox_lb", NAME_KEY="plox_name", LB_MAX=10, GLB_MAX=30, GLB_SHOW=20;
