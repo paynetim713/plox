@@ -22,6 +22,7 @@ import { COLS, ROWS, COLORS, FIXED_COLORS, PIECE_LEN, PLAYER_INTERVAL, JUNK_FALL
   let score=0, cleared=0, level=1, combo=0, maxCombo=0;
   let dropAccum=0, dropInterval=800, baseInterval=720, colorCount=5, pieceLen=3, softDrop=false;
   let junkMin=3, junkMax=4, pieceUntilJunk=4, justJunked=false;   // 难度:随机乱入方块组
+  let fallingJunk=[];   // 乱入方块作为独立下落实体(落地才算进棋盘 → 逻辑与画面同步)
   let clearing=null, clearTimer=0, flashPulse=0;
   let visRow=0, visCol=3, shakeT=0, rotT=0, freezeT=0;
   let high=0;   // 当前难度的个人最高分(各难度分开记)
@@ -99,7 +100,7 @@ import { COLS, ROWS, COLORS, FIXED_COLORS, PIECE_LEN, PLAYER_INTERVAL, JUNK_FALL
     junkMin=DIFFS[diffKey].junkMin; junkMax=DIFFS[diffKey].junkMax;
     pieceUntilJunk=randInt(junkMin,junkMax); justJunked=false;
     dropInterval=baseInterval; dropAccum=0; softDrop=false; clearing=null; sub="control";
-    shakeT=0; particles.length=0; popups.length=0;
+    shakeT=0; particles.length=0; popups.length=0; fallingJunk.length=0;
     refreshHigh();   // HUD「最高」显示当前难度的个人最高
     next=newPiece(); spawn(); syncHUD();
   }
@@ -332,32 +333,38 @@ import { COLS, ROWS, COLORS, FIXED_COLORS, PIECE_LEN, PLAYER_INTERVAL, JUNK_FALL
     clearing=null; gravity(); beginResolve();
   }
 
-  // 板面完全静止后:按难度频率「乱入」无法操作的方块组,再生成下一个玩家方块
+  // 板面静止后:按难度频率「乱入」独立下落的方块,再立刻生成下一个玩家方块(两者并行下落)
   function settle(){
     if(state!=="playing") return;
-    if(!justJunked && --pieceUntilJunk<=0){
-      pieceUntilJunk=randInt(junkMin,junkMax); justJunked=true;
-      const ov=dropJunk();
-      if(ov.overflow){ gameOver(); return; }
-      if(ov.added>0){ combo=0; sub="resolving"; beginResolve(); return; } // 处理乱入产生的消除
-    }
-    justJunked=false; sub="control"; spawn();
+    if(--pieceUntilJunk<=0){ pieceUntilJunk=randInt(junkMin,junkMax); dropJunk(); }
+    sub="control"; spawn();
   }
 
-  // 随机「乱入」1~2 个单独方块(各落到一个随机列的堆顶),玩家无法操作,从顶部匀速缓降
+  // 乱入:在 1~2 个随机列顶部上方生成独立下落实体(不立刻占棋盘;落地逻辑见 updateFx)
   function dropJunk(){
     const n=Math.random()<0.6?1:2;   // 多数只乱入 1 个,偶尔 2 个
     const avail=[]; for(let c=0;c<COLS;c++) avail.push(c);
-    let added=0, overflow=false;
+    let added=0;
     for(let i=0;i<n && avail.length;i++){
       const c=avail.splice((Math.random()*avail.length)|0,1)[0];
-      let top=0; while(top<ROWS && board[top][c]==null) top++;   // 该列最高已填行
-      const r=top-1;                                            // 落在堆顶之上一格
-      if(r<0){ overflow=true; break; }
-      board[r][c]=rc(); voff[r][c]=-Math.min(top,7); vmode[r][c]=1; vscale[r][c]=1; added++;
+      fallingJunk.push({c, y:-1.6, idx:rc()});   // 从顶部上方开始匀速缓降
+      added++;
     }
-    if(added){ beep(150,.08,"square",.07); shakeT=Math.min(110, 50+added*15); }
-    return {added, overflow};
+    if(added) beep(150,.07,"square",.05);
+    return {added};
+  }
+
+  // 乱入方块落地后,清掉它造成的消除(不打断玩家正在操作的方块;即时清除 + 粒子反馈)
+  function resolveJunk(){
+    let total=0;
+    while(true){ const m=findMatches(); if(m.size===0) break;
+      total+=m.size;
+      for(const key of m){ const [r,c]=key.split(",").map(Number);
+        spawnParticles(c,r,board[r][c]); board[r][c]=null; voff[r][c]=0; vmode[r][c]=0; vscale[r][c]=1; }
+      gravity();
+    }
+    if(total){ score+=total*10; cleared+=total; syncHUD();
+      shakeT=Math.min(180,60+total*16); beep(520,.1,"triangle",.1); }
   }
 
   // ---------- 操作 ----------
@@ -399,6 +406,22 @@ import { COLS, ROWS, COLORS, FIXED_COLORS, PIECE_LEN, PLAYER_INTERVAL, JUNK_FALL
         else { voff[r][c]*=Math.pow(0.80,k); if(Math.abs(voff[r][c])<0.02) voff[r][c]=0; }                // 其它:快速回落
       }
       if(vscale[r][c]!==1){ vscale[r][c]+=(1-vscale[r][c])*Math.min(1,0.22*k); if(Math.abs(vscale[r][c]-1)<0.01) vscale[r][c]=1; }
+    }
+    // 乱入实体:匀速缓降,落到该列堆顶即"落地"(并入棋盘 + 处理消除);只在控制阶段推进
+    if(state==="playing" && sub==="control"){
+      for(let i=fallingJunk.length-1;i>=0;i--){
+        const j=fallingJunk[i];
+        j.y += JUNK_FALL*dt;
+        let top=0; while(top<ROWS && board[top][j.c]==null) top++;   // 该列最高已填行
+        const R=top-1;                                              // 落点
+        if(R<0){ fallingJunk.length=0; gameOver(); return; }        // 该列已满 → 顶出,结束
+        if(j.y>=R){
+          board[R][j.c]=j.idx; vscale[R][j.c]=1.3;   // 落地小弹
+          fallingJunk.splice(i,1);
+          beep(150,.06,"square",.06);
+          resolveJunk();
+        }
+      }
     }
     // 玩家方块:连续平滑下落(消除"跳一格/掉帧"的卡顿感)
     if(state==="playing" && current && sub==="control"){
@@ -459,6 +482,9 @@ import { COLS, ROWS, COLORS, FIXED_COLORS, PIECE_LEN, PLAYER_INTERVAL, JUNK_FALL
         const p=Math.max(2,CELL*0.07); rr(ctx,c*CELL+p,ry*CELL+p,CELL-p*2,CELL-p*2,CELL*0.18); ctx.fill(); ctx.restore();
       } else drawBlock(ctx,c,ry,board[r][c],{scale:vscale[r][c]});
     }
+
+    // 乱入下落实体(独立于棋盘)
+    for(const j of fallingJunk){ if(j.y>-1) drawBlock(ctx, j.c, j.y, j.idx, {}); }
 
     if(state==="playing"&&current&&sub==="control"){
       // visRow/visCol 由 updateFx 连续插值,这里只负责画
@@ -713,6 +739,7 @@ import { COLS, ROWS, COLORS, FIXED_COLORS, PIECE_LEN, PLAYER_INTERVAL, JUNK_FALL
     else if(act==="menu"){ closeSettings(false); stopMusic(); showMenu(); }
   }
   $("gearBtn").addEventListener("click", openSettings);
+  $("pauseBtn").addEventListener("click", togglePause);   // 顶部独立暂停键
 
   // ---------- 启动 ----------
   board=Array.from({length:ROWS},()=>Array(COLS).fill(null));
@@ -731,7 +758,9 @@ import { COLS, ROWS, COLORS, FIXED_COLORS, PIECE_LEN, PLAYER_INTERVAL, JUNK_FALL
       stats:()=>({ filled: board.reduce((a,row)=>a+row.filter(x=>x!=null).length,0),
         perCol: Array.from({length:COLS},(_,c)=>{let n=0;for(let r=0;r<ROWS;r++)if(board[r][c]!=null)n++;return n;}),
         pieceUntilJunk, justJunked, junkMin, junkMax, sub, state, diffKey }),
-      forceJunk:()=>dropJunk()
+      forceJunk:()=>dropJunk(),
+      falling:()=>fallingJunk.map(j=>({c:j.c,y:Math.round(j.y*100)/100})),
+      tick:(ms)=>updateFx(ms||16)
     };
   }
 

@@ -29,6 +29,9 @@
     display:flex; align-items:center; justify-content:center; transition:.15s;}
   .gear:hover{color:var(--accent);}
   .gear:active{transform:scale(.9) rotate(35deg);}
+  .topbtns{display:flex; align-items:center; gap:2px;}
+  #pauseBtn{font-size:17px;}
+  #pauseBtn:active{transform:scale(.9);}   /* 暂停键不要齿轮的旋转 */
 
   .hud{width:100%; max-width:520px; display:flex; gap:8px; margin-bottom:8px;}
   .stat{flex:1; background:var(--panel); border:1px solid var(--line);
