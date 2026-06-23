@@ -31,3 +31,9 @@ export const DIFFS = {
   hard:   {label:"困难", sub:"干扰多", junkMin:4,  junkMax:5},
 };
 export const CLEAR_MS = 240;
+
+// ---------- 关卡(闯关有目标)----------
+export const STAGE_BASE = 18;   // 第 1 关需要消除的方块数
+export const STAGE_INC  = 10;   // 每过一关递增多少
+export function stageGoal(stage){ return STAGE_BASE + (stage-1)*STAGE_INC; }
+

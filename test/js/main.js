@@ -1,5 +1,5 @@
 import { COLS, ROWS, COLORS, FIXED_COLORS, PIECE_LEN, PLAYER_INTERVAL, JUNK_FALL,
-         ROT_MS, PRAISE, PRAISE_COL, DIFFS, CLEAR_MS } from "./config.js";
+         ROT_MS, PRAISE, PRAISE_COL, DIFFS, CLEAR_MS, stageGoal } from "./config.js";
 
 (() => {
   "use strict";
@@ -19,7 +19,7 @@ import { COLS, ROWS, COLORS, FIXED_COLORS, PIECE_LEN, PLAYER_INTERVAL, JUNK_FALL
 
   // ---------- 状态 ----------
   let board, voff, vscale, vmode, current, next, state="start", sub="control";
-  let score=0, cleared=0, level=1, combo=0, maxCombo=0;
+  let score=0, cleared=0, level=1, combo=0, maxCombo=0, stageStart=0;   // level=当前关卡;stageStart=本关开始时的累计消除数
   let dropAccum=0, dropInterval=800, baseInterval=720, colorCount=5, pieceLen=3, softDrop=false;
   let junkMin=3, junkMax=4, pieceUntilJunk=4, justJunked=false;   // 难度:随机乱入方块组
   let fallingJunk=[];   // 乱入方块作为独立下落实体(落地才算进棋盘 → 逻辑与画面同步)
@@ -95,7 +95,7 @@ import { COLS, ROWS, COLORS, FIXED_COLORS, PIECE_LEN, PLAYER_INTERVAL, JUNK_FALL
     voff=Array.from({length:ROWS},()=>new Float32Array(COLS));
     vscale=Array.from({length:ROWS},()=>{const a=new Float32Array(COLS); a.fill(1); return a;});
     vmode=Array.from({length:ROWS},()=>new Uint8Array(COLS));
-    score=0; cleared=0; level=1; combo=0; maxCombo=0;
+    score=0; cleared=0; level=1; combo=0; maxCombo=0; stageStart=0;
     baseInterval=PLAYER_INTERVAL; colorCount=FIXED_COLORS; pieceLen=PIECE_LEN;
     junkMin=DIFFS[diffKey].junkMin; junkMax=DIFFS[diffKey].junkMax;
     pieceUntilJunk=randInt(junkMin,junkMax); justJunked=false;
@@ -316,8 +316,12 @@ import { COLS, ROWS, COLORS, FIXED_COLORS, PIECE_LEN, PLAYER_INTERVAL, JUNK_FALL
     const bonus = m.size>3 ? (m.size-3)*15 : 0;
     const gained = m.size*10*combo + bonus*combo;
     score+=gained; cleared+=m.size;
-    const nl=Math.floor(cleared/24)+1;
-    if(nl>level){ level=nl; }               // 升级只加分,不改速度
+    // 关卡:本关消除够目标 → 过关,乱入更频繁、越来越难
+    if(cleared-stageStart >= stageGoal(level)){
+      stageStart=cleared; level++;
+      junkMin=Math.max(1, junkMin-1); junkMax=Math.max(2, junkMax-1);   // 每关乱入更勤
+      spawnStageBanner(level);
+    }
     clearing=m; clearTimer=CLEAR_MS; flashPulse=0;
     shakeT=Math.min(220, 60+m.size*14+combo*20);   // 震动减弱
     if(m.size>=5 || combo>=3) freezeT=Math.min(80, 30+m.size*6);   // 大消除/连击:顿帧增重
@@ -391,6 +395,15 @@ import { COLS, ROWS, COLORS, FIXED_COLORS, PIECE_LEN, PLAYER_INTERVAL, JUNK_FALL
     const tier=Math.min(cb-1, PRAISE.length-1);
     popups.push({x:COLS*CELL/2, y:ROWS*CELL*0.34, life:1, age:0, tier:tier,
       word:PRAISE[tier], col:PRAISE_COL[tier], sub:"+"+gained});
+  }
+  // 过关横幅:醒目、停留久一点
+  function spawnStageBanner(stage){
+    popups.length=0;
+    popups.push({x:COLS*CELL/2, y:ROWS*CELL*0.32, life:1.6, age:0, tier:4, banner:true,
+      word:"第 "+stage+" 关", col:"#ffd86a", sub:"加油!"});
+    beep(660,.14,"triangle",.12); beep(990,.13,"sine",.09); beep(1320,.12,"sine",.06);
+    shakeT=Math.min(200,150); freezeT=Math.min(90,70);
+    syncHUD();
   }
   function updateFx(dt){
     const k=dt/16.7;
@@ -532,6 +545,14 @@ import { COLS, ROWS, COLORS, FIXED_COLORS, PIECE_LEN, PLAYER_INTERVAL, JUNK_FALL
         ctx.fillStyle=col.fill; rr(ctx,bx,by,s,s,s*0.2); ctx.fill();
         ctx.strokeStyle=col.glow; ctx.lineWidth=1.4; rr(ctx,bx,by,s,s,s*0.2); ctx.stroke(); }
       ctx.restore();
+    }
+
+    // 关卡进度条:顶部细条(本关已消除 / 过关目标)
+    if(state==="playing"||state==="paused"){
+      const need=stageGoal(level), prog=Math.max(0,Math.min(1,(cleared-stageStart)/need));
+      const bw=COLS*CELL, bh=Math.max(3,CELL*0.07);
+      ctx.fillStyle="rgba(255,255,255,.10)"; ctx.fillRect(0,0,bw,bh);
+      ctx.fillStyle="#ffd86a"; ctx.fillRect(0,0,bw*prog,bh);
     }
 
     ctx.restore();
@@ -758,10 +779,12 @@ import { COLS, ROWS, COLORS, FIXED_COLORS, PIECE_LEN, PLAYER_INTERVAL, JUNK_FALL
     window.__plox={
       stats:()=>({ filled: board.reduce((a,row)=>a+row.filter(x=>x!=null).length,0),
         perCol: Array.from({length:COLS},(_,c)=>{let n=0;for(let r=0;r<ROWS;r++)if(board[r][c]!=null)n++;return n;}),
-        pieceUntilJunk, justJunked, junkMin, junkMax, sub, state, diffKey }),
+        pieceUntilJunk, justJunked, junkMin, junkMax, sub, state, diffKey,
+        stage:level, goal:stageGoal(level), prog:cleared-stageStart, cleared }),
       forceJunk:()=>dropJunk(),
       falling:()=>fallingJunk.map(j=>({c:j.c,y:Math.round(j.y*100)/100})),
-      tick:(ms)=>updateFx(ms||16)
+      tick:(ms)=>updateFx(ms||16),
+      clearN:(n)=>{ cleared+=(n||stageGoal(level)); if(cleared-stageStart>=stageGoal(level)){ stageStart=cleared; level++; junkMin=Math.max(1,junkMin-1); junkMax=Math.max(2,junkMax-1); spawnStageBanner(level); } syncHUD(); }
     };
   }
 
