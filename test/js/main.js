@@ -21,7 +21,8 @@ import { ITEMS, ITEM_LIST, getItem, addItem, useItem, ownedItems } from "./items
   const elCoins=$("coins"), elItembar=$("itembar");
 
   // ---------- 金币 + 道具 UI ----------
-  function syncCoins(){ if(elCoins) elCoins.textContent="🪙 "+getCoins(); }
+  const elCoinNum=$("coinNum");
+  function syncCoins(){ if(elCoinNum) elCoinNum.textContent=getCoins(); }
   syncCoins();
   // 局内道具栏:只列出已拥有的道具,点一下用一个
   function renderItemBar(){
@@ -29,7 +30,7 @@ import { ITEMS, ITEM_LIST, getItem, addItem, useItem, ownedItems } from "./items
     const owned=ownedItems();
     elItembar.innerHTML = owned.map(id=>{
       const it=ITEMS[id];
-      return '<button class="itembtn" data-id="'+id+'" title="'+it.desc+'">'+it.icon+'<span class="n">'+getItem(id)+'</span></button>';
+      return '<button class="itembtn" data-id="'+id+'" title="'+it.desc+'">'+it.short+'<span class="n">×'+getItem(id)+'</span></button>';
     }).join("");
     [...elItembar.querySelectorAll(".itembtn")].forEach(b=>
       b.addEventListener("click", ()=>useBomb(b.dataset.id)));
@@ -138,7 +139,7 @@ import { ITEMS, ITEM_LIST, getItem, addItem, useItem, ownedItems } from "./items
         '<div class="segHint" id="segHint">'+DIFFS[diffKey].sub+'</div>'+
       '</div>'+
       '<button class="play" id="playBtn">开 始</button>'+
-      '<div class="link" id="shopLink">🛒 商店</div>'+
+      '<div class="link" id="shopLink">商店</div>'+
       '<div class="link" id="lbLink">排行榜</div>';
     overlay.classList.remove("hidden");
     syncCoins();
@@ -156,17 +157,17 @@ import { ITEMS, ITEM_LIST, getItem, addItem, useItem, ownedItems } from "./items
     state="start";
     const rows = ITEM_LIST.map(id=>{
       const it=ITEMS[id], own=getItem(id);
-      return '<div class="shopRow"><div class="ic">'+it.icon+'</div>'+
+      return '<div class="shopRow"><div class="ic"><i class="ic-bomb'+(it.rows>=4?' big':'')+'"></i></div>'+
         '<div class="meta"><div class="nm">'+it.name+'</div><div class="ds">'+it.desc+'</div>'+
         '<div class="own">已拥有 '+own+'</div></div>'+
-        '<button class="buyBtn" data-id="'+id+'">🪙 '+it.cost+'</button></div>';
+        '<button class="buyBtn" data-id="'+id+'"><i class="coin"></i>'+it.cost+'</button></div>';
     }).join("");
     overlay.innerHTML =
       '<h1 style="font-size:26px">商店</h1>'+
-      '<div class="coins" style="font-size:15px">🪙 '+getCoins()+'</div>'+
+      '<div class="coins" style="font-size:15px"><i class="coin"></i>'+getCoins()+'</div>'+
       '<div class="shopList">'+rows+'</div>'+
-      '<p style="margin-top:4px">过关可赚金币 · 新玩家已赠 10 🪙</p>'+
-      '<div class="link" id="shopBack">← 返回</div>';
+      '<p style="margin-top:4px">过关可赚金币 · 新玩家已赠 10 金币</p>'+
+      '<div class="link" id="shopBack">返回</div>';
     overlay.classList.remove("hidden");
     const refresh=()=>{ showShop(); };   // 买完重画(刷新金币/拥有数/按钮可用)
     [...overlay.querySelectorAll(".buyBtn")].forEach(b=>{
@@ -244,12 +245,12 @@ import { ITEMS, ITEM_LIST, getItem, addItem, useItem, ownedItems } from "./items
   }
   function lbTable(list, hiName, hiScore){
     if(!list || !list.length) return '<p>还没有记录,快来抢第一名!</p>';
-    const medal=['🥇','🥈','🥉']; let hit=false;
+    let hit=false;
     let h='<table class="lb">';
     list.slice(0,GLB_SHOW).forEach((e,i)=>{
       const me=!hit && hiName && e.name===hiName && (hiScore==null || e.score===hiScore);
       if(me) hit=true;
-      h+='<tr class="'+(me?'me':'')+'"><td class="rk">'+(medal[i]||(i+1))+
+      h+='<tr class="'+(me?'me':'')+'"><td class="rk'+(i<3?' top'+(i+1):'')+'">'+(i+1)+
         '</td><td class="nm">'+escapeHtml(e.name)+'</td><td class="sc">'+e.score+'</td></tr>'; });
     return h+'</table>';
   }
@@ -258,7 +259,7 @@ import { ITEMS, ITEM_LIST, getItem, addItem, useItem, ownedItems } from "./items
     state="menu"; stopMusic();
     const d=DIFF_KEYS.includes(diff)?diff:diffKey;
     const hi=hiName || (localStorage.getItem(NAME_KEY)||"");
-    overlay.innerHTML='<h1>🏆 排行榜</h1><p style="font-size:12px;color:var(--dim)">加载全球榜…</p>';
+    overlay.innerHTML='<h1>排行榜</h1><p style="font-size:12px;color:var(--dim)">加载全球榜…</p>';
     overlay.classList.remove("hidden");
     fetchGlobal().then(g=>{ if(state!=="menu") return; lbCache=g; renderLb(d,hi,hiScore); });
   }
@@ -267,10 +268,10 @@ import { ITEMS, ITEM_LIST, getItem, addItem, useItem, ownedItems } from "./items
     const src=online?lbCache:getLB();
     const list=src.filter(e=>(e.diff||"normal")===d).sort((a,b)=>b.score-a.score);
     const tabs=DIFF_KEYS.map(k=>'<b class="'+(k===d?'on':'')+'" data-d="'+k+'">'+DIFFS[k].label+'</b>').join('');
-    overlay.innerHTML='<h1>🏆 排行榜</h1>'+
+    overlay.innerHTML='<h1>排行榜</h1>'+
       '<div class="lbtabs">'+tabs+'</div>'+
       lbTable(list,hiName,hiScore)+
-      '<p style="font-size:11px">'+(online?'🌍 全球':'⚠ 离线·本机')+' · '+DIFFS[d].label+'难度</p>'+
+      '<p style="font-size:11px">'+(online?'全球':'离线·本机')+' · '+DIFFS[d].label+'难度</p>'+
       '<button class="play" id="lbBack">返回</button>';
     overlay.classList.remove("hidden");
     [...overlay.querySelectorAll('.lbtabs b')].forEach(b=>b.addEventListener('click',()=>renderLb(b.dataset.d,hiName,hiScore)));
@@ -315,7 +316,7 @@ import { ITEMS, ITEM_LIST, getItem, addItem, useItem, ownedItems } from "./items
       '<p class="big">本局得分 <b style="color:#fff">'+score+'</b></p>'+
       '<p>消除 '+cleared+' 个 · 最高连击 ×'+maxCombo+' · 关卡 '+level+'<br>历史最高 '+high+'</p>'+
       '<button class="play" id="playBtn">再来一局</button>'+
-      '<div class="link" id="lbLink2">🏆 排行榜</div>'+
+      '<div class="link" id="lbLink2">排行榜</div>'+
       '<div class="foot" id="backMenu" style="cursor:pointer;text-decoration:underline">选择难度</div>';
     overlay.classList.remove("hidden");
     $("playBtn").addEventListener("click", start);
@@ -470,7 +471,7 @@ import { ITEMS, ITEM_LIST, getItem, addItem, useItem, ownedItems } from "./items
   function spawnStageBanner(stage, reward){
     popups.length=0;
     popups.push({x:COLS*CELL/2, y:ROWS*CELL*0.32, life:1.6, age:0, tier:4, banner:true,
-      word:"第 "+stage+" 关", col:"#ffd86a", sub: reward?("🪙 +"+reward):"加油!"});
+      word:"第 "+stage+" 关", col:"#ffd86a", sub: reward?("金币 +"+reward):"加油!"});
     beep(660,.14,"triangle",.12); beep(990,.13,"sine",.09); beep(1320,.12,"sine",.06);
     shakeT=Math.min(200,150); freezeT=Math.min(90,70);
     syncHUD();
@@ -762,7 +763,7 @@ import { ITEMS, ITEM_LIST, getItem, addItem, useItem, ownedItems } from "./items
       g=document.createElement("div"); g.id="a2hs"; g.className="guide";
       g.innerHTML=
         '<div class="gcard">'+
-          '<h2>📲 全屏玩法</h2>'+
+          '<h2>全屏玩法</h2>'+
           '<p class="ghint">iPhone 把 PLOX 加到主屏幕,从桌面图标打开就是<b>无边框全屏</b>(还能离线玩)</p>'+
           '<ol>'+
             '<li>点屏幕底部的「分享」'+shareSvg+'</li>'+
@@ -771,7 +772,7 @@ import { ITEMS, ITEM_LIST, getItem, addItem, useItem, ownedItems } from "./items
           '</ol>'+
           '<button class="play gclose">知道了</button>'+
         '</div>'+
-        '<div class="garrow">⬇︎</div>';
+        '<div class="garrow">↓</div>';
       document.body.appendChild(g);
       g.addEventListener("click",e=>{ if(e.target===g||e.target.classList.contains("gclose")) g.classList.add("hidden"); });
     }
@@ -798,7 +799,7 @@ import { ITEMS, ITEM_LIST, getItem, addItem, useItem, ownedItems } from "./items
   function fsRowHTML(){
     if(isStandalone) return '';
     if(isIOS || !fsSupported) return '<button class="srow" data-act="a2hs"><span>全屏 · 添加到主屏幕</span><span class="sw arrow">›</span></button>';
-    return '<button class="srow" data-act="fs"><span>全屏</span><span class="sw arrow">⛶</span></button>';
+    return '<button class="srow" data-act="fs"><span>全屏</span><span class="sw arrow">›</span></button>';
   }
   function sheetHTML(){
     const sw=(on,label,k)=>'<button class="srow" data-tog="'+k+'"><span>'+label+'</span><span class="sw'+(on?' on':'')+'">'+(on?'开':'关')+'</span></button>';

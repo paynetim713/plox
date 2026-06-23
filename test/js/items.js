@@ -4,8 +4,8 @@ const INV_KEY = "plox_items";
 
 // 目前两种炸弹:炸掉棋盘最下方 N 行。后续可在此追加新道具,商店/局内栏会自动列出。
 export const ITEMS = {
-  bomb3: { id:"bomb3", name:"炸弹", icon:"💣", cost:1, rows:3, desc:"炸掉最下方 3 行" },
-  bomb4: { id:"bomb4", name:"巨型炸弹", icon:"🧨", cost:2, rows:4, desc:"炸掉最下方 4 行" },
+  bomb3: { id:"bomb3", name:"炸弹",     short:"炸3", cost:1, rows:3, desc:"炸掉最下方 3 行" },
+  bomb4: { id:"bomb4", name:"巨型炸弹", short:"炸4", cost:2, rows:4, desc:"炸掉最下方 4 行" },
 };
 export const ITEM_LIST = Object.keys(ITEMS);   // 稳定顺序
 
