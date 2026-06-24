@@ -290,7 +290,6 @@ import { purchase } from "./platform.js";   // showRewardedAd/hasRewardedAd 等�
           '<div class="exLabel"><i class="dia"></i>10 钻石 <span>→</span> <i class="coin"></i>100 金币</div>'+
           '<button class="actBtn2" id="exBtn"'+(getDiamonds()<10?' disabled':'')+'>兑换</button>'+
         '</div>'+
-        '<p class="shopTip">¥1 = 10 钻石 · 网页为测试环境(模拟支付),抖音版接真实支付</p>'+
         '<div class="link" id="rcBack">返回</div>';
     overlay.classList.remove("hidden");
     [...overlay.querySelectorAll(".diaPack")].forEach(b=>{
