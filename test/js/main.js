@@ -1,8 +1,8 @@
 import { COLS, ROWS, COLORS, FIXED_COLORS, PIECE_LEN, PLAYER_INTERVAL, JUNK_FALL,
          ROT_MS, PRAISE, PRAISE_COL, DIFFS, CLEAR_MS, stageGoal, dropIntervalFor } from "./config.js";
-import { getCoins, addCoins, spendCoins } from "./economy.js";
+import { getCoins, addCoins, spendCoins, getDiamonds, addDiamonds, spendDiamonds, DIAMOND_TO_COIN } from "./economy.js";
 import { ITEMS, ITEM_LIST, getItem, addItem, useItem, ownedItems } from "./items.js";
-import { showRewardedAd, hasRewardedAd } from "./platform.js";
+import { showRewardedAd, hasRewardedAd, purchase } from "./platform.js";
 
 (() => {
   "use strict";
@@ -245,10 +245,11 @@ import { showRewardedAd, hasRewardedAd } from "./platform.js";
         '<button class="buyBtn" data-id="'+id+'"><i class="coin"></i>'+it.cost+'</button></div>';
     }).join("");
     overlay.innerHTML =
-      '<h1 style="font-size:26px">商店</h1>'+
-      '<div class="coins" style="font-size:15px"><i class="coin"></i>'+getCoins()+'</div>'+
+      '<h1 class="ovTitle">商店</h1>'+
+      '<div class="walletRow"><span class="coins"><i class="coin"></i>'+nfmt(getCoins())+'</span>'+
+        '<button class="topupBtn" id="topupBtn"><i class="dia"></i>充值</button></div>'+
       '<div class="shopList">'+rows+'</div>'+
-      '<p style="margin-top:4px">过关 / 高连击赚金币 · 局内点道具炸开下方</p>'+
+      '<p class="shopTip">每闯 5 关得 1 金币 · 局内点道具炸开下方;不够就充值</p>'+
       '<div class="link" id="shopBack">返回</div>';
     overlay.classList.remove("hidden");
     [...overlay.querySelectorAll(".buyBtn")].forEach(b=>{
@@ -259,7 +260,52 @@ import { showRewardedAd, hasRewardedAd } from "./platform.js";
           syncCoins(); renderItemBar(); showShop(back); }   // 买完重画
       });
     });
+    $("topupBtn").addEventListener("click", ()=>showRecharge(back));
     $("shopBack").addEventListener("click", ()=> back==="settle" ? showSettle() : showMenu());
+  }
+  // ---------- 充值:钻石礼包(真钱)+ 钻石兑金币 ----------
+  const RECHARGE_PACKS=[
+    {id:"d10",  rmb:1,   dia:10},
+    {id:"d60",  rmb:6,   dia:60,   bonus:6},
+    {id:"d300", rmb:30,  dia:300,  bonus:40},
+    {id:"d680", rmb:68,  dia:680,  bonus:120},
+    {id:"d1280",rmb:128, dia:1280, bonus:300},
+  ];
+  let purchasing=false;
+  function showRecharge(back){
+    state="start";
+    const packs=RECHARGE_PACKS.map(p=>{
+      const total=p.dia+(p.bonus||0);
+      return '<button class="diaPack" data-id="'+p.id+'">'+
+        '<div class="dpTop"><i class="dia big"></i><b>'+total+'</b>'+(p.bonus?'<span class="dpBonus">含赠 '+p.bonus+'</span>':'')+'</div>'+
+        '<div class="dpPrice">¥'+p.rmb+'</div></button>';
+    }).join("");
+    overlay.innerHTML=
+      '<div class="ovr">'+
+        '<h1 class="ovTitle">充值</h1>'+
+        '<div class="walletRow"><span class="coins"><i class="coin"></i>'+nfmt(getCoins())+'</span>'+
+          '<span class="coins dia-chip"><i class="dia"></i>'+nfmt(getDiamonds())+'</span></div>'+
+        '<div class="diaPacks">'+packs+'</div>'+
+        '<div class="exchangeRow">'+
+          '<div class="exLabel"><i class="dia"></i>10 钻石 <span>→</span> <i class="coin"></i>100 金币</div>'+
+          '<button class="actBtn2" id="exBtn"'+(getDiamonds()<10?' disabled':'')+'>兑换</button>'+
+        '</div>'+
+        '<p class="shopTip">¥1 = 10 钻石 · 网页为测试环境(模拟支付),抖音版接真实支付</p>'+
+        '<div class="link" id="rcBack">返回</div>';
+    overlay.classList.remove("hidden");
+    [...overlay.querySelectorAll(".diaPack")].forEach(b=>{
+      b.addEventListener("click", ()=>{
+        if(purchasing) return; purchasing=true;
+        const p=RECHARGE_PACKS.find(x=>x.id===b.dataset.id);
+        b.classList.add("buying"); b.querySelector(".dpPrice").textContent="支付中…";
+        purchase(p, ()=>{ addDiamonds(p.dia+(p.bonus||0)); purchasing=false; beep(880,.1,"triangle",.09); beep(1320,.08,"sine",.05); showRecharge(back); },
+                    ()=>{ purchasing=false; showRecharge(back); });
+      });
+    });
+    $("exBtn").addEventListener("click", ()=>{
+      if(spendDiamonds(10)){ addCoins(10*DIAMOND_TO_COIN); syncCoins(); beep(700,.07,"triangle",.07); showRecharge(back); }
+    });
+    $("rcBack").addEventListener("click", ()=> back==="revive" ? showReviveOffer() : showShop(back));
   }
 
   // ---------- 排行榜:本机持久化 + 全球共享 ----------
@@ -409,17 +455,14 @@ import { showRewardedAd, hasRewardedAd } from "./platform.js";
         '<div class="ovScore">本局 <b>'+nfmt(score)+'</b></div>'+
         '<div class="ovHint">复活后炸掉最下方 <b>6 行</b>,继续冲分</div>'+
         '<div class="reviveBtns">'+
-          (hasRewardedAd()?'<button class="play reviveBtn ad" id="reviveAd"><span>看广告 · 免费复活</span></button>':'')+
           '<button class="play reviveBtn coin'+(afford?'':' off')+'" id="reviveCoin"><i class="coin"></i><span>金币复活 · '+cost+'</span></button>'+
+          (afford?'':'<button class="actBtn2 wide" id="reviveRecharge">金币不够,去充值</button>')+
         '</div>'+
         '<div class="link" id="giveUp">放弃,看结算</div>'+
       '</div>';
     overlay.classList.remove("hidden");
-    const ad=$("reviveAd");
-    if(ad) ad.addEventListener("click",()=>{ ad.querySelector("span").textContent="广告播放中…";
-      [...overlay.querySelectorAll("button")].forEach(b=>b.disabled=true);
-      showRewardedAd(()=>doRevive(), ()=>{ showReviveOffer(); }); });
     $("reviveCoin").addEventListener("click",()=>{ if(getCoins()>=cost && spendCoins(cost)){ syncCoins(); doRevive(); } });
+    if($("reviveRecharge")) $("reviveRecharge").addEventListener("click", ()=>showRecharge("revive"));
     $("giveUp").addEventListener("click", showSettle);
   }
   function doRevive(){
@@ -437,16 +480,13 @@ import { showRewardedAd, hasRewardedAd } from "./platform.js";
   const sc3=(k,v)=>'<div class="sc"><div class="sck">'+k+'</div><div class="scv">'+v+'</div></div>';
   function showSettle(){
     state="gameover"; overlay.classList.remove("hidden");
-    const runCoins=Math.min(20, Math.floor(cleared/12)+Math.floor(score/600));   // 按表现发金币 → 经济循环
-    if(runCoins>0 && !settleAwarded){ addCoins(runCoins); settleAwarded=true; }
     syncCoins();
     overlay.innerHTML=
       '<div class="ovr">'+
         '<h1 class="ovTitle">结算</h1>'+
         '<div class="settleScore"><span>本局得分</span><b>'+nfmt(score)+'</b></div>'+
         '<div class="settleStats">'+sc3("关卡",level)+sc3("消除",cleared)+sc3("最高连击","×"+maxCombo)+'</div>'+
-        '<div class="settleMeta">历史最高 '+nfmt(high)+' · 最高关卡 '+getBestStage(diffKey)+
-          (runCoins>0?' · <span class="cy">本局 +'+runCoins+' 金币</span>':'')+'</div>'+
+        '<div class="settleMeta">历史最高 '+nfmt(high)+' · 最高关卡 '+getBestStage(diffKey)+'</div>'+
         '<button class="play" id="againBtn"><span>再来一局</span></button>'+
         '<div class="settleActions">'+
           (score>0?'<button class="actBtn2" id="uploadBtn">上传成绩</button>':'')+
@@ -505,15 +545,15 @@ import { showRewardedAd, hasRewardedAd } from "./platform.js";
     const bonus = m.size>3 ? (m.size-3)*15 : 0;
     const gained = m.size*10*combo + bonus*combo;
     score+=gained; cleared+=m.size;
-    if(combo>=4){ addCoins(1); syncCoins(); }   // 高连击也奖励金币 → 把核心技巧接进经济循环
-    // 关卡:本关消除够目标 → 过关,提速 + 乱入更频繁(各难度终局不同),并奖励金币
+    // 关卡:本关消除够目标 → 过关,提速 + 乱入更频繁(各难度终局不同);每满 5 关奖励 1 金币
     if(cleared-stageStart >= stageGoal(level)){
       stageStart=cleared; level++;
       dropInterval=dropIntervalFor(baseInterval, level);              // 提速
       if(level%2===0){ const D=DIFFS[diffKey];                        // 每 2 关加密一次,各难度有各自下限
         junkMin=Math.max(D.floorMin, junkMin-1); junkMax=Math.max(D.floorMax, junkMax-1); }
-      const reward=2+Math.floor(level/3);
-      addCoins(reward); syncCoins(); recordBestStage(level);
+      const reward = (level%5===0) ? 1 : 0;                           // 每闯 5 关得 1 金币(其余靠充值)
+      if(reward){ addCoins(reward); syncCoins(); }
+      recordBestStage(level);
       spawnStageBanner(level, reward);
     }
     clearing=m; clearTimer=CLEAR_MS; flashPulse=0;
@@ -1102,8 +1142,9 @@ import { showRewardedAd, hasRewardedAd } from "./platform.js";
       forceJunk:()=>dropJunk(),
       falling:()=>fallingJunk.map(j=>({c:j.c,y:Math.round(j.y*100)/100})),
       tick:(ms)=>updateFx(ms||16),
-      clearN:(n)=>{ cleared+=(n||stageGoal(level)); if(cleared-stageStart>=stageGoal(level)){ stageStart=cleared; level++; dropInterval=dropIntervalFor(baseInterval,level); if(level%2===0){ const D=DIFFS[diffKey]; junkMin=Math.max(D.floorMin,junkMin-1); junkMax=Math.max(D.floorMax,junkMax-1); } const rw=2+Math.floor(level/3); addCoins(rw); syncCoins(); recordBestStage(level); spawnStageBanner(level,rw); } syncHUD(); },
+      clearN:(n)=>{ cleared+=(n||stageGoal(level)); if(cleared-stageStart>=stageGoal(level)){ stageStart=cleared; level++; dropInterval=dropIntervalFor(baseInterval,level); if(level%2===0){ const D=DIFFS[diffKey]; junkMin=Math.max(D.floorMin,junkMin-1); junkMax=Math.max(D.floorMax,junkMax-1); } const rw=(level%5===0)?1:0; if(rw){ addCoins(rw); syncCoins(); } recordBestStage(level); spawnStageBanner(level,rw); } syncHUD(); },
       coins:()=>getCoins(), give:(n)=>{ addCoins(n||5); syncCoins(); return getCoins(); },
+      diamonds:()=>getDiamonds(), giveDia:(n)=>{ addDiamonds(n||50); return getDiamonds(); },
       grant:(id,n)=>{ addItem(id||"bomb",n||1); renderItemBar(); return getItem(id||"bomb"); },
       bomb:(id)=>useBomb(id||"bomb"), inv:()=>ownedItems().map(id=>({id,n:getItem(id)}))
     };

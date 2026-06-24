@@ -26,3 +26,13 @@ export function spendCoins(n){                        // 够则扣款返回 true
   setCoins(v - n);
   return true;
 }
+
+// ---------- 钻石(硬通货,真钱充值;¥1 = 10 钻;10 钻可兑 100 金币)----------
+const DIAMONDS_KEY = "plox_diamonds";
+export const DIAMOND_TO_COIN = 10;   // 1 钻 = 10 金币
+export function getDiamonds(){
+  try{ const v = parseInt(localStorage.getItem(DIAMONDS_KEY) || "0", 10); return Number.isFinite(v) ? Math.max(0, v) : 0; }
+  catch(e){ return 0; }
+}
+export function addDiamonds(n){ try{ localStorage.setItem(DIAMONDS_KEY, String(Math.max(0, getDiamonds() + Math.floor(n)))); }catch(e){} return getDiamonds(); }
+export function spendDiamonds(n){ const v = getDiamonds(); if(v < n) return false; try{ localStorage.setItem(DIAMONDS_KEY, String(v - n)); }catch(e){} return true; }

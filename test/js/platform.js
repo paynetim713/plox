@@ -6,6 +6,19 @@ export const PLATFORM = "web";
 // 广告是否就绪(抖音版改为检测激励视频实例是否 load 完成)
 export function hasRewardedAd(){ return true; }
 
+// 充值:购买钻石礼包。pack = {id, rmb, diamonds}。
+// 网页版无真实支付,模拟"支付成功"直接发钻石,方便测试。抖音版替换为平台支付(tt 虚拟支付 / requestGamePayment)。
+export function purchase(pack, onSuccess, onFail){
+  try{
+    // ===== 抖音小程序示例(移植时启用)=====
+    // tt.requestGamePayment({ mode:'game', currencyType:'CNY', platform:'android', buyQuantity: pack.rmb*10, ...,
+    //   success(){ onSuccess && onSuccess(pack); }, fail(){ onFail && onFail(); } });
+    // return;
+    // ===== 网页占位:模拟支付成功 =====
+    setTimeout(() => { onSuccess && onSuccess(pack); }, 450);
+  }catch(e){ onFail && onFail(); }
+}
+
 // 看激励视频换奖励。网页版无真实广告,给个极短"播放"占位后直接发放,方便测试整条复活链路。
 export function showRewardedAd(onReward, onFail){
   try{
