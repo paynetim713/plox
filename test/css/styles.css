@@ -237,8 +237,8 @@
   .reviveBtns{display:flex; flex-direction:column; gap:10px; width:100%; max-width:360px; margin-top:2px;}
   .reviveBtn{display:flex; align-items:center; justify-content:center; gap:8px; width:100%; margin:0; padding:14px; font-size:16px;}
   .reviveBtn.ad{background:linear-gradient(95deg,#3ad07a,#1fa85e); box-shadow:0 8px 24px rgba(31,168,94,.36);}
-  .reviveBtn.coin{background:linear-gradient(95deg,#ffd86a,#ffb02e); color:#3a2400; box-shadow:0 8px 24px rgba(255,176,46,.34);}
-  .reviveBtn.coin .coin{width:18px; height:18px;}
+  .reviveBtn.rcoin{background:linear-gradient(95deg,#ffd86a,#ffb02e); color:#3a2400; box-shadow:0 8px 24px rgba(255,176,46,.34);}
+  .reviveBtn.rcoin .coin{width:18px; height:18px;}
   .reviveBtn.off{opacity:.45; filter:grayscale(.4); pointer-events:none;}
   .settleScore{display:flex; flex-direction:column; align-items:center; gap:2px;}
   .settleScore span{font-size:12px; color:var(--dim); letter-spacing:.1em;}

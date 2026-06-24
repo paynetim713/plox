@@ -455,7 +455,7 @@ import { showRewardedAd, hasRewardedAd, purchase } from "./platform.js";
         '<div class="ovScore">本局 <b>'+nfmt(score)+'</b></div>'+
         '<div class="ovHint">复活后炸掉最下方 <b>6 行</b>,继续冲分</div>'+
         '<div class="reviveBtns">'+
-          '<button class="play reviveBtn coin'+(afford?'':' off')+'" id="reviveCoin"><i class="coin"></i><span>金币复活 · '+cost+'</span></button>'+
+          '<button class="play reviveBtn rcoin'+(afford?'':' off')+'" id="reviveCoin"><i class="coin"></i><span>金币复活 · '+cost+'</span></button>'+
           (afford?'':'<button class="actBtn2 wide" id="reviveRecharge">金币不够,去充值</button>')+
         '</div>'+
         '<div class="link" id="giveUp">放弃,看结算</div>'+
