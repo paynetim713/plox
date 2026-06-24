@@ -2,7 +2,7 @@ import { COLS, ROWS, COLORS, FIXED_COLORS, PIECE_LEN, PLAYER_INTERVAL, JUNK_FALL
          ROT_MS, PRAISE, PRAISE_COL, DIFFS, CLEAR_MS, stageGoal, dropIntervalFor } from "./config.js";
 import { getCoins, addCoins, spendCoins, getDiamonds, addDiamonds, spendDiamonds, DIAMOND_TO_COIN } from "./economy.js";
 import { ITEMS, ITEM_LIST, getItem, addItem, useItem, ownedItems } from "./items.js";
-import { showRewardedAd, hasRewardedAd, purchase } from "./platform.js";
+import { purchase } from "./platform.js";   // showRewardedAd/hasRewardedAd 等接广告时再启用
 
 (() => {
   "use strict";
@@ -298,8 +298,10 @@ import { showRewardedAd, hasRewardedAd, purchase } from "./platform.js";
         if(purchasing) return; purchasing=true;
         const p=RECHARGE_PACKS.find(x=>x.id===b.dataset.id);
         b.classList.add("buying"); b.querySelector(".dpPrice").textContent="支付中…";
-        purchase(p, ()=>{ addDiamonds(p.dia+(p.bonus||0)); purchasing=false; beep(880,.1,"triangle",.09); beep(1320,.08,"sine",.05); showRecharge(back); },
-                    ()=>{ purchasing=false; showRecharge(back); });
+        // 钻石照常发放(即使玩家已离开充值页,支付也算数);但「只在仍停留在充值页时」才重绘,
+        // 否则一笔慢回调可能把充值页弹回到游戏/其它界面之上,卡死。靠 #rcBack 是否还在判断当前是否仍是充值页。
+        purchase(p, ()=>{ addDiamonds(p.dia+(p.bonus||0)); purchasing=false; beep(880,.1,"triangle",.09); beep(1320,.08,"sine",.05); if($("rcBack")) showRecharge(back); },
+                    ()=>{ purchasing=false; if($("rcBack")) showRecharge(back); });
       });
     });
     $("exBtn").addEventListener("click", ()=>{
@@ -436,11 +438,10 @@ import { showRewardedAd, hasRewardedAd, purchase } from "./platform.js";
     ensureAudio(); startMusic(); beep(660,.08,"sine",.1);
   }
   const MAX_REVIVES=3;
-  let settleAwarded=false;   // 本局结算金币只发一次
   const reviveCost=()=>5+revives*5;   // 5 / 10 / 15 金币
   function gameOver(){
     if(state!=="playing" && state!=="paused") return;
-    state="gameover"; stopMusic(); softDrop=false; settleAwarded=false; beep(140,.25,"sawtooth",.15);
+    state="gameover"; stopMusic(); softDrop=false; beep(140,.25,"sawtooth",.15);
     if(score>high){ high=score; setBest(diffKey,score); elHigh.textContent=high; }   // 个人最高本地更新(不强制上传)
     recordBestStage(level);
     showReviveOffer();

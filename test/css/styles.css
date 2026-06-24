@@ -20,7 +20,8 @@
   }
   /* 顶部细条:品牌 + 设置齿轮 */
   .topbar{width:100%; max-width:520px; display:flex; align-items:center; justify-content:space-between;
-    margin-bottom:9px; padding:0 2px; position:relative; z-index:60;}   /* 浮在全屏弹层之上,菜单/商店里金币·齿轮仍可见可点 */
+    margin-bottom:9px; padding:0 2px; position:relative; z-index:60; pointer-events:none;}   /* 浮在全屏弹层之上;空白带不拦截点击 */
+  .topbar .topbtns{pointer-events:auto;}   /* 只有右侧按钮区接收点击,其余穿透到下层弹层内容 */
   .brand{font-weight:800; letter-spacing:.42em; font-size:17px; padding-left:.42em;
     background:linear-gradient(90deg,var(--accent2),var(--accent));
     -webkit-background-clip:text; background-clip:text; color:transparent;}
