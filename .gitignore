@@ -5,3 +5,4 @@
 PLOX/java-springboot-demo/
 PLOX/**/node_modules/
 node_modules/
+dist/
