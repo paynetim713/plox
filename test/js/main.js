@@ -4,9 +4,13 @@ import { getCoins, addCoins, spendCoins, getDiamonds, addDiamonds, spendDiamonds
 import { ITEMS, ITEM_LIST, getItem, addItem, useItem, ownedItems } from "./items.js";
 import { purchase } from "./platform.js";   // showRewardedAd/hasRewardedAd 等接广告时再启用
 import * as CG from "./crazy.js";           // CrazyGames v3 SDK(广告/存档/生命周期);不在 CG 上时自动降级
+import { t, lang, setLang, applyStatic } from "./i18n.js";   // 国际化:默认英文,中文用户自动中文
 
 (() => {
   "use strict";
+
+  // 夸奖词:取当前语言版本(中文 = 原 PRAISE,英文 = 翻译);颜色仍用 config 的 PRAISE_COL
+  const PRAISE_W = (Array.isArray(t('praise')) && t('praise').length) ? t('praise') : PRAISE;
 
   const _ui = (location.search.match(/[?&]ui=(mobile|desktop)/)||[])[1];
   const isMobile = _ui ? _ui==="mobile"
@@ -174,10 +178,10 @@ import * as CG from "./crazy.js";           // CrazyGames v3 SDK(广告/存档/�
   function diffCardHTML(k){
     const bars=[0,1,2].map(i=>'<i class="'+(i<DIFF_INT[k]?'on':'')+'"></i>').join('');
     return '<button class="diffCard'+(k===diffKey?' on':'')+'" data-k="'+k+'">'+
-      '<div class="dcLabel">'+DIFFS[k].label+'</div>'+
-      '<div class="dcSub">'+DIFFS[k].sub+'</div>'+
+      '<div class="dcLabel">'+t('diff_'+k+'_label')+'</div>'+
+      '<div class="dcSub">'+t('diff_'+k+'_sub')+'</div>'+
       '<div class="dcBars">'+bars+'</div>'+
-      '<div class="dcBest">最高 '+nfmt(getBest(k))+'</div></button>';
+      '<div class="dcBest">'+t('diff_best')+' '+nfmt(getBest(k))+'</div></button>';
   }
   function showMenu(){
     state="start"; refreshHigh();
@@ -185,15 +189,15 @@ import * as CG from "./crazy.js";           // CrazyGames v3 SDK(广告/存档/�
       '<div class="menu">'+
         '<div class="menuAmb"><i></i><i></i><i></i><i></i></div>'+
         '<div class="menuHero">'+ICON.gem+
-          '<div class="logo">PLOX</div><div class="logoSub">霓 虹 消 除</div></div>'+
-        '<div class="bestRibbon">'+ICON.star+'<span>本难度最高</span><b id="bestVal">'+nfmt(getBest(diffKey))+'</b></div>'+
+          '<div class="logo">PLOX</div><div class="logoSub">'+t('logo_sub')+'</div></div>'+
+        '<div class="bestRibbon">'+ICON.star+'<span>'+t('best_this_diff')+'</span><b id="bestVal">'+nfmt(getBest(diffKey))+'</b></div>'+
         '<div class="diffCards">'+diffCardHTML("easy")+diffCardHTML("normal")+diffCardHTML("hard")+'</div>'+
-        '<button class="playBtn" id="playBtn">'+ICON.play+'<span>开始</span></button>'+
+        '<button class="playBtn" id="playBtn">'+ICON.play+'<span>'+t('menu_start')+'</span></button>'+
         '<div class="menuActions">'+
-          '<button class="actBtn shop" id="shopLink">'+ICON.cart+'<span>商店</span></button>'+
-          '<button class="actBtn lb" id="lbLink">'+ICON.trophy+'<span>排行榜</span></button>'+
+          '<button class="actBtn shop" id="shopLink">'+ICON.cart+'<span>'+t('menu_shop')+'</span></button>'+
+          '<button class="actBtn lb" id="lbLink">'+ICON.trophy+'<span>'+t('menu_leaderboard')+'</span></button>'+
         '</div>'+
-        '<div class="menuHelp" id="rulesLink">玩法说明</div>'+
+        '<div class="menuHelp" id="rulesLink">'+t('menu_help')+'</div>'+
       '</div>';
     overlay.classList.remove("hidden");
     syncCoins();
@@ -219,19 +223,19 @@ import * as CG from "./crazy.js";           // CrazyGames v3 SDK(广告/存档/�
     try{ localStorage.setItem("plox_seen_rules","1"); }catch(e){}
     overlay.innerHTML=
       '<div class="rules">'+
-        '<h1 class="ovTitle">玩法</h1>'+
+        '<h1 class="ovTitle">'+t('rules_title')+'</h1>'+
         '<div class="ruleList">'+
-          ruleRow(RULE_ICON.tap,"轻点","切换当前方块的 3 个颜色")+
-          ruleRow(RULE_ICON.move,"左右拖","左右移动方块(逐格,贴手)")+
-          ruleRow(RULE_ICON.down,"向下滑","直接落到落点预览的位置")+
+          ruleRow(RULE_ICON.tap,t('rule_tap_t'),t('rule_tap_d'))+
+          ruleRow(RULE_ICON.move,t('rule_move_t'),t('rule_move_d'))+
+          ruleRow(RULE_ICON.down,t('rule_down_t'),t('rule_down_d'))+
         '</div>'+
         '<div class="ruleNotes">'+
-          '<p>同色连成 <b>3+</b>(横/竖/斜)即消除,连锁得分更高</p>'+
-          '<p><span class="warn">橙红闪烁</span>的是<b>干扰块</b>,随机从顶部砸下、不可操作 —— 难度越高砸得越勤</p>'+
-          '<p>消够目标 <b>过关</b>:提速、奖励金币;爆顶可<b>金币复活</b>(炸开下方继续)</p>'+
-          '<p>金币去<b>商店</b>买<b>炸弹</b>,局内点一下炸掉下方几行</p>'+
+          '<p>'+t('rule_note_match')+'</p>'+
+          '<p>'+t('rule_note_junk')+'</p>'+
+          '<p>'+t('rule_note_clear')+'</p>'+
+          '<p>'+t('rule_note_shop')+'</p>'+
         '</div>'+
-        '<button class="play" id="rulesOk"><span>'+(first?'开始吧':'知道了')+'</span></button>'+
+        '<button class="play" id="rulesOk"><span>'+(first?t('rules_ok_first'):t('rules_ok'))+'</span></button>'+
       '</div>';
     overlay.classList.remove("hidden");
     $("rulesOk").addEventListener("click", showMenu);
@@ -242,17 +246,17 @@ import * as CG from "./crazy.js";           // CrazyGames v3 SDK(广告/存档/�
     const rows = ITEM_LIST.map(id=>{
       const it=ITEMS[id], own=getItem(id);
       return '<div class="shopRow"><div class="ic">'+bombIcon(it)+'</div>'+
-        '<div class="meta"><div class="nm">'+it.name+'</div><div class="ds">'+it.desc+'</div>'+
-        '<div class="own">已拥有 '+own+'</div></div>'+
+        '<div class="meta"><div class="nm">'+t('item_'+id+'_name')+'</div><div class="ds">'+t('item_'+id+'_desc')+'</div>'+
+        '<div class="own">'+t('shop_owned')+' '+own+'</div></div>'+
         '<button class="buyBtn" data-id="'+id+'"><i class="coin"></i>'+it.cost+'</button></div>';
     }).join("");
     overlay.innerHTML =
-      '<h1 class="ovTitle">商店</h1>'+
+      '<h1 class="ovTitle">'+t('shop_title')+'</h1>'+
       '<div class="walletRow"><span class="coins"><i class="coin"></i>'+nfmt(getCoins())+'</span>'+
-        '<button class="topupBtn" id="topupBtn"><i class="dia"></i>充值</button></div>'+
+        '<button class="topupBtn" id="topupBtn"><i class="dia"></i>'+t('shop_topup')+'</button></div>'+
       '<div class="shopList">'+rows+'</div>'+
-      '<p class="shopTip">每 5 关送 1 金币 · 局内点道具炸开下方;不够就充值</p>'+
-      '<div class="link" id="shopBack">返回</div>';
+      '<p class="shopTip">'+t('shop_tip')+'</p>'+
+      '<div class="link" id="shopBack">'+t('shop_back')+'</div>';
     overlay.classList.remove("hidden");
     [...overlay.querySelectorAll(".buyBtn")].forEach(b=>{
       const it=ITEMS[b.dataset.id];
@@ -279,26 +283,26 @@ import * as CG from "./crazy.js";           // CrazyGames v3 SDK(广告/存档/�
     const packs=RECHARGE_PACKS.map(p=>{
       const total=p.dia+(p.bonus||0);
       return '<button class="diaPack" data-id="'+p.id+'">'+
-        '<div class="dpTop"><i class="dia big"></i><b>'+total+'</b>'+(p.bonus?'<span class="dpBonus">含赠 '+p.bonus+'</span>':'')+'</div>'+
+        '<div class="dpTop"><i class="dia big"></i><b>'+total+'</b>'+(p.bonus?'<span class="dpBonus">'+t('recharge_bonus')+' '+p.bonus+'</span>':'')+'</div>'+
         '<div class="dpPrice">¥'+p.rmb+'</div></button>';
     }).join("");
     overlay.innerHTML=
       '<div class="ovr">'+
-        '<h1 class="ovTitle">充值</h1>'+
+        '<h1 class="ovTitle">'+t('recharge_title')+'</h1>'+
         '<div class="walletRow"><span class="coins"><i class="coin"></i>'+nfmt(getCoins())+'</span>'+
           '<span class="coins dia-chip"><i class="dia"></i>'+nfmt(getDiamonds())+'</span></div>'+
         '<div class="diaPacks">'+packs+'</div>'+
         '<div class="exchangeRow">'+
-          '<div class="exLabel"><i class="dia"></i>10 钻石 <span>→</span> <i class="coin"></i>100 金币</div>'+
-          '<button class="actBtn2" id="exBtn"'+(getDiamonds()<10?' disabled':'')+'>兑换</button>'+
+          '<div class="exLabel"><i class="dia"></i>'+t('recharge_exchange_label_a')+' <span>→</span> <i class="coin"></i>'+t('recharge_exchange_label_b')+'</div>'+
+          '<button class="actBtn2" id="exBtn"'+(getDiamonds()<10?' disabled':'')+'>'+t('recharge_exchange_btn')+'</button>'+
         '</div>'+
-        '<div class="link" id="rcBack">返回</div>';
+        '<div class="link" id="rcBack">'+t('recharge_back')+'</div>';
     overlay.classList.remove("hidden");
     [...overlay.querySelectorAll(".diaPack")].forEach(b=>{
       b.addEventListener("click", ()=>{
         if(purchasing) return; purchasing=true;
         const p=RECHARGE_PACKS.find(x=>x.id===b.dataset.id);
-        b.classList.add("buying"); b.querySelector(".dpPrice").textContent="支付中…";
+        b.classList.add("buying"); b.querySelector(".dpPrice").textContent=t('recharge_paying');
         // 钻石照常发放(即使玩家已离开充值页,支付也算数);但「只在仍停留在充值页时」才重绘,
         // 否则一笔慢回调可能把充值页弹回到游戏/其它界面之上,卡死。靠 #rcBack 是否还在判断当前是否仍是充值页。
         purchase(p, ()=>{ addDiamonds(p.dia+(p.bonus||0)); purchasing=false; beep(880,.1,"triangle",.09); beep(1320,.08,"sine",.05); if($("rcBack")) showRecharge(back); },
@@ -373,7 +377,7 @@ import * as CG from "./crazy.js";           // CrazyGames v3 SDK(广告/存档/�
     return last;
   }
   function lbTable(list, hiName, hiScore){
-    if(!list || !list.length) return '<p>还没有记录,快来抢第一名!</p>';
+    if(!list || !list.length) return '<p>'+t('lb_empty')+'</p>';
     let hit=false;
     let h='<table class="lb">';
     list.slice(0,GLB_SHOW).forEach((e,i)=>{
@@ -389,7 +393,7 @@ import * as CG from "./crazy.js";           // CrazyGames v3 SDK(广告/存档/�
     state="menu"; stopMusic();
     const d=DIFF_KEYS.includes(diff)?diff:diffKey;
     const hi=hiName || (localStorage.getItem(NAME_KEY)||"");
-    overlay.innerHTML='<h1>排行榜</h1><p style="font-size:12px;color:var(--dim)">加载全球榜…</p>';
+    overlay.innerHTML='<h1>'+t('lb_title')+'</h1><p style="font-size:12px;color:var(--dim)">'+t('lb_loading')+'</p>';
     overlay.classList.remove("hidden");
     fetchGlobal().then(g=>{ if(state!=="menu") return; lbCache=g; renderLb(d,hi,hiScore); });
   }
@@ -397,12 +401,12 @@ import * as CG from "./crazy.js";           // CrazyGames v3 SDK(广告/存档/�
     const online=lbCache!==null;
     const src=online?lbCache:getLB();
     const list=src.filter(e=>(e.diff||"normal")===d).sort((a,b)=>b.score-a.score);
-    const tabs=DIFF_KEYS.map(k=>'<b class="'+(k===d?'on':'')+'" data-d="'+k+'">'+DIFFS[k].label+'</b>').join('');
-    overlay.innerHTML='<h1>排行榜</h1>'+
+    const tabs=DIFF_KEYS.map(k=>'<b class="'+(k===d?'on':'')+'" data-d="'+k+'">'+t('diff_'+k+'_label')+'</b>').join('');
+    overlay.innerHTML='<h1>'+t('lb_title')+'</h1>'+
       '<div class="lbtabs">'+tabs+'</div>'+
       lbTable(list,hiName,hiScore)+
-      '<p style="font-size:11px">'+(online?'全球':'离线·本机')+' · '+DIFFS[d].label+'难度</p>'+
-      '<button class="play" id="lbBack">返回</button>';
+      '<p style="font-size:11px">'+(online?t('lb_global'):t('lb_offline'))+' · '+t('diff_'+d+'_label')+t('lb_diff_suffix')+'</p>'+
+      '<button class="play" id="lbBack">'+t('lb_back')+'</button>';
     overlay.classList.remove("hidden");
     [...overlay.querySelectorAll('.lbtabs b')].forEach(b=>b.addEventListener('click',()=>renderLb(b.dataset.d,hiName,hiScore)));
     $("lbBack").addEventListener("click", showMenu);
@@ -411,11 +415,11 @@ import * as CG from "./crazy.js";           // CrazyGames v3 SDK(广告/存档/�
     state="menu"; stopMusic();
     const snapScore=score, snapDiff=diffKey;   // 快照,避免异步提交期间被改动
     const last=localStorage.getItem(NAME_KEY)||"YOU";
-    overlay.innerHTML='<h1>上传成绩</h1>'+
-      '<p class="big">得分 <b style="color:#fff">'+score+'</b> · 登上全球榜</p>'+
+    overlay.innerHTML='<h1>'+t('name_title')+'</h1>'+
+      '<p class="big">'+t('name_score_a')+' <b style="color:#fff">'+score+'</b> '+t('name_score_b')+'</p>'+
       '<input class="nameIn" id="nameIn" maxlength="8" value="'+escapeHtml(last)+'" autocomplete="off" />'+
-      '<button class="play" id="nameOk">保存并上传</button>'+
-      '<div class="link" id="nameCancel">取消,返回结算</div>';
+      '<button class="play" id="nameOk">'+t('name_ok')+'</button>'+
+      '<div class="link" id="nameCancel">'+t('name_cancel')+'</div>';
     overlay.classList.remove("hidden");
     const inp=$("nameIn"); setTimeout(()=>{ inp.focus(); inp.select(); },40);
     $("nameCancel").addEventListener("click", showSettle);
@@ -425,7 +429,7 @@ import * as CG from "./crazy.js";           // CrazyGames v3 SDK(广告/存档/�
       const raw=(inp.value.trim()||"YOU"); const nm=raw.toUpperCase().slice(0,10);
       try{ localStorage.setItem(NAME_KEY,nm); }catch(e){}   // Safari 隐私模式/配额满也不卡住上传
       addToLB(raw);
-      overlay.innerHTML='<h1>上传中…</h1><p style="font-size:12px;color:var(--dim)">正在提交到全球排行榜</p>';
+      overlay.innerHTML='<h1>'+t('name_uploading_title')+'</h1><p style="font-size:12px;color:var(--dim)">'+t('name_uploading_sub')+'</p>';
       await submitGlobal({name:nm, score:snapScore, diff:snapDiff});
       showLeaderboard(snapDiff, nm, snapScore);
     };
@@ -454,15 +458,15 @@ import * as CG from "./crazy.js";           // CrazyGames v3 SDK(广告/存档/�
     const cost=reviveCost(), afford=getCoins()>=cost;
     overlay.innerHTML=
       '<div class="ovr">'+
-        '<h1 class="ovTitle warn">差一点!</h1>'+
-        '<div class="ovScore">本局 <b>'+nfmt(score)+'</b></div>'+
-        '<div class="ovHint">复活后炸掉最下方 <b>6 行</b>,继续冲分</div>'+
+        '<h1 class="ovTitle warn">'+t('revive_title')+'</h1>'+
+        '<div class="ovScore">'+t('revive_this_round')+' <b>'+nfmt(score)+'</b></div>'+
+        '<div class="ovHint">'+t('revive_hint_a')+' <b>'+t('revive_rows')+'</b>'+t('revive_hint_b')+'</div>'+
         '<div class="reviveBtns">'+
-          (CG.enabled()?'<button class="play reviveBtn" id="reviveAd"><span>看广告复活 · 免费</span></button>':'')+
-          '<button class="play reviveBtn rcoin'+(afford?'':' off')+'" id="reviveCoin"><i class="coin"></i><span>金币复活 · '+cost+'</span></button>'+
-          (afford?'':'<button class="actBtn2 wide" id="reviveRecharge">金币不够,去充值</button>')+
+          (CG.enabled()?'<button class="play reviveBtn" id="reviveAd"><span>'+t('revive_ad')+'</span></button>':'')+
+          '<button class="play reviveBtn rcoin'+(afford?'':' off')+'" id="reviveCoin"><i class="coin"></i><span>'+t('revive_coin')+' · '+cost+'</span></button>'+
+          (afford?'':'<button class="actBtn2 wide" id="reviveRecharge">'+t('revive_recharge')+'</button>')+
         '</div>'+
-        '<div class="link" id="giveUp">放弃,看结算</div>'+
+        '<div class="link" id="giveUp">'+t('revive_giveup')+'</div>'+
       '</div>';
     overlay.classList.remove("hidden");
     if($("reviveAd")) $("reviveAd").addEventListener("click",()=>{ CG.rewarded(()=>doRevive(), ()=>{}); });   // 看完才复活;失败保持在复活页
@@ -488,17 +492,17 @@ import * as CG from "./crazy.js";           // CrazyGames v3 SDK(广告/存档/�
     syncCoins();
     overlay.innerHTML=
       '<div class="ovr">'+
-        '<h1 class="ovTitle">结算</h1>'+
-        '<div class="settleScore"><span>本局得分</span><b>'+nfmt(score)+'</b></div>'+
-        '<div class="settleStats">'+sc3("关卡",level)+sc3("消除",cleared)+sc3("最高连击","×"+maxCombo)+'</div>'+
-        '<div class="settleMeta">历史最高 '+nfmt(high)+' · 最高关卡 '+getBestStage(diffKey)+'</div>'+
-        '<button class="play" id="againBtn"><span>再来一局</span></button>'+
+        '<h1 class="ovTitle">'+t('settle_title')+'</h1>'+
+        '<div class="settleScore"><span>'+t('settle_score')+'</span><b>'+nfmt(score)+'</b></div>'+
+        '<div class="settleStats">'+sc3(t('settle_stage'),level)+sc3(t('settle_cleared'),cleared)+sc3(t('settle_maxcombo'),"×"+maxCombo)+'</div>'+
+        '<div class="settleMeta">'+t('settle_meta_a')+' '+nfmt(high)+' · '+t('settle_meta_b')+' '+getBestStage(diffKey)+'</div>'+
+        '<button class="play" id="againBtn"><span>'+t('settle_again')+'</span></button>'+
         '<div class="settleActions">'+
-          (score>0?'<button class="actBtn2" id="uploadBtn">上传成绩</button>':'')+
-          '<button class="actBtn2" id="shopBtn2">商店</button>'+
-          '<button class="actBtn2" id="lbBtn2">排行榜</button>'+
+          (score>0?'<button class="actBtn2" id="uploadBtn">'+t('settle_upload')+'</button>':'')+
+          '<button class="actBtn2" id="shopBtn2">'+t('settle_shop')+'</button>'+
+          '<button class="actBtn2" id="lbBtn2">'+t('settle_lb')+'</button>'+
         '</div>'+
-        '<div class="link" id="toMenu">选择难度</div>'+
+        '<div class="link" id="toMenu">'+t('settle_menu')+'</div>'+
       '</div>';
     $("againBtn").addEventListener("click", ()=>{ start(); CG.midgame(); });   // 重开之间插一条插屏广告(SDK 自带频次控制)
     if($("uploadBtn")) $("uploadBtn").addEventListener("click", ()=>showNameEntry());
@@ -662,12 +666,12 @@ import * as CG from "./crazy.js";           // CrazyGames v3 SDK(广告/存档/�
   }
   // 连击词:同一条链里「就地升级」(不清空重弹),并累加总分,读起来是一个不断升级的播报
   function spawnPopup(gained, cb){
-    const tier=Math.min(cb-1, PRAISE.length-1);
+    const tier=Math.min(cb-1, PRAISE_W.length-1);
     let q=popups[0];
     if(!q || cb===1){ q={x:COLS*CELL/2, y:ROWS*CELL*0.34, life:1, age:0, tier:-1, total:0, combo:1}; popups.length=0; popups.push(q); }
     q.total+=gained; q.combo=cb; q.life=1;
     if(tier>q.tier){ q.tier=tier; q.age=0; }   // 仅升级时重新"弹"一下
-    q.word=PRAISE[q.tier]; q.col=PRAISE_COL[q.tier]; q.sub="+"+q.total;
+    q.word=PRAISE_W[q.tier]; q.col=PRAISE_COL[q.tier]; q.sub="+"+q.total;
   }
   // 过关横幅:独立变量,连击词冲不掉它
   function spawnStageBanner(stage, reward){
@@ -851,9 +855,10 @@ import * as CG from "./crazy.js";           // CrazyGames v3 SDK(广告/存档/�
       ctx.save(); ctx.globalAlpha=Math.max(0,fade); ctx.textAlign="center"; ctx.textBaseline="middle";
       ctx.translate(COLS*CELL/2, ROWS*CELL*0.20); ctx.scale(sc,sc);   // 过关横幅上移,和连击词(0.34)分到不同高度带
       const fs=Math.round(CELL*1.0);
+      const stageTxt=(t('banner_stage_a')+' '+banner.stage+' '+t('banner_stage_b')).trim();
       ctx.font="900 "+fs+"px system-ui,sans-serif";
-      ctx.lineWidth=Math.max(4,CELL*0.13); ctx.strokeStyle="rgba(8,2,20,.95)"; ctx.strokeText("第 "+banner.stage+" 关",0,0);
-      ctx.fillStyle="#ffd86a"; ctx.fillText("第 "+banner.stage+" 关",0,0);
+      ctx.lineWidth=Math.max(4,CELL*0.13); ctx.strokeStyle="rgba(8,2,20,.95)"; ctx.strokeText(stageTxt,0,0);
+      ctx.fillStyle="#ffd86a"; ctx.fillText(stageTxt,0,0);
       if(banner.reward){ const subFs=Math.round(CELL*0.46), subY=fs*0.76, txt="+"+banner.reward;
         ctx.font="800 "+subFs+"px system-ui,sans-serif";
         const tw=ctx.measureText(txt).width, r=subFs*0.5, gap=subFs*0.26, cx=-(r*2+gap+tw)/2+r;
@@ -875,8 +880,9 @@ import * as CG from "./crazy.js";           // CrazyGames v3 SDK(广告/存档/�
       ctx.fillStyle="rgba(255,255,255,.10)"; ctx.fillRect(0,0,bw,bh);
       ctx.fillStyle="#ffd86a"; ctx.fillRect(0,0,bw*prog,bh);
       ctx.save(); ctx.textAlign="left"; ctx.textBaseline="top"; ctx.font="700 "+Math.max(9,Math.round(CELL*0.26))+"px system-ui,sans-serif";
-      ctx.fillStyle="rgba(8,2,20,.55)"; ctx.fillText("关卡 "+level+" · "+have+"/"+need, 5, bh+4);
-      ctx.fillStyle="#d9c8ff"; ctx.fillText("关卡 "+level+" · "+have+"/"+need, 4, bh+3); ctx.restore();
+      const progTxt=t('prog_stage')+" "+level+" · "+have+"/"+need;
+      ctx.fillStyle="rgba(8,2,20,.55)"; ctx.fillText(progTxt, 5, bh+4);
+      ctx.fillStyle="#d9c8ff"; ctx.fillText(progTxt, 4, bh+3); ctx.restore();
     }
 
     ctx.restore();
@@ -929,7 +935,7 @@ import * as CG from "./crazy.js";           // CrazyGames v3 SDK(广告/存档/�
       g.gain.exponentialRampToValueAtTime(0.0001,n+dur);
       o.connect(g); g.connect(dest||actx.destination); o.start(n); o.stop(n+dur+0.02);
     }catch(e){} }
-  function beep(f,d,t,v){ if(soundOn && !adPaused){ ensureAudio(); tone(f,d,t,v); } }
+  function beep(f,d,t,v){ if(soundOn && !adPaused && !CG.muted()){ ensureAudio(); tone(f,d,t,v); } }
 
   // 背景音乐:多首生成式电子乐(柔和取向,经低通母线),玩家可在设置里切换
   let musicTimer=null, musicStep=0;
@@ -944,7 +950,7 @@ import * as CG from "./crazy.js";           // CrazyGames v3 SDK(广告/存档/�
   function setMusicTrack(i){ musicTrack=((i%TRACKS.length)+TRACKS.length)%TRACKS.length;
     try{ localStorage.setItem("plox_music",String(musicTrack)); }catch(e){} }
   function musicTick(){
-    if(!musicOn||state!=="playing"||!actx||actx.state!=="running"){ musicTimer=null; return; }
+    if(!musicOn||CG.muted()||state!=="playing"||!actx||actx.state!=="running"){ musicTimer=null; return; }
     const tk=TRACKS[musicTrack]||TRACKS[0], sc=tk.scale;
     const idx=tk.pat[musicStep%tk.pat.length] % sc.length;
     tone(nf(sc[idx]),0.3,tk.lead,tk.lv,0.03,musicBus);
@@ -952,7 +958,7 @@ import * as CG from "./crazy.js";           // CrazyGames v3 SDK(广告/存档/�
     if(musicStep%tk.bass2Every===(tk.bass2Every>>1)) tone(nf(sc[Math.min(2,sc.length-1)]),0.26,"sine",0.018,0.03,musicBus);
     musicStep++; musicTimer=setTimeout(musicTick,tk.tempo);
   }
-  function startMusic(){ if(!musicTimer&&musicOn&&state==="playing"){ ensureAudio(); musicTick(); } }
+  function startMusic(){ if(!musicTimer&&musicOn&&!CG.muted()&&state==="playing"){ ensureAudio(); musicTick(); } }
   function stopMusic(){ if(musicTimer){ clearTimeout(musicTimer); musicTimer=null; } }
   // 广告播放期间:静音 + 暂停(adPaused 让主循环定格、beep 失声);广告结束恢复
   let _adWasPlaying=false;
@@ -960,6 +966,8 @@ import * as CG from "./crazy.js";           // CrazyGames v3 SDK(广告/存档/�
     adStart(){ adPaused=true; _adWasPlaying=(state==="playing"); stopMusic(); },
     adEnd(){ adPaused=false; if(state==="playing"){ last=performance.now(); if(_adWasPlaying||musicOn) startMusic(); } }
   });
+  // 平台静音(CrazyGames 播放器上的静音键):SDK 静音优先于游戏内开关
+  CG.onMuteChange((m)=>{ if(m) stopMusic(); else if(state==="playing"&&musicOn) startMusic(); });
   // 切后台/锁屏:停音乐;回到前台再恢复(否则 iOS 上 AudioContext 被挂起,音乐会哑/糊)
   document.addEventListener("visibilitychange",()=>{
     if(document.hidden){ stopMusic(); softDrop=false; if(state==="playing") CG.gameplayStop(); }
@@ -1046,14 +1054,14 @@ import * as CG from "./crazy.js";           // CrazyGames v3 SDK(广告/存档/�
       g=document.createElement("div"); g.id="a2hs"; g.className="guide";
       g.innerHTML=
         '<div class="gcard">'+
-          '<h2>全屏玩法</h2>'+
-          '<p class="ghint">iPhone 把 PLOX 加到主屏幕,从桌面图标打开就是<b>无边框全屏</b>(还能离线玩)</p>'+
+          '<h2>'+t('a2hs_title')+'</h2>'+
+          '<p class="ghint">'+t('a2hs_hint')+'</p>'+
           '<ol>'+
-            '<li>点屏幕底部的「分享」'+shareSvg+'</li>'+
-            '<li>菜单里选「<b>添加到主屏幕</b>」</li>'+
-            '<li>从桌面新出现的 <b>PLOX</b> 图标打开</li>'+
+            '<li>'+t('a2hs_step1_a')+t('a2hs_step1_share')+t('a2hs_step1_b')+' '+shareSvg+'</li>'+
+            '<li>'+t('a2hs_step2')+'</li>'+
+            '<li>'+t('a2hs_step3_a')+' <b>PLOX</b> '+t('a2hs_step3_b')+'</li>'+
           '</ol>'+
-          '<button class="play gclose">知道了</button>'+
+          '<button class="play gclose">'+t('a2hs_close')+'</button>'+
         '</div>'+
         '<div class="garrow">↓</div>';
       document.body.appendChild(g);
@@ -1071,7 +1079,7 @@ import * as CG from "./crazy.js";           // CrazyGames v3 SDK(广告/存档/�
   // ---------- 暂停(键盘 P / 设置内继续)----------
   function togglePause(){
     if(state==="playing"){ state="paused"; softDrop=false; stopMusic();
-      overlay.innerHTML='<h1>暂停</h1><button class="play" id="playBtn">继续</button>';
+      overlay.innerHTML='<h1>'+t('pause_title')+'</h1><button class="play" id="playBtn">'+t('pause_resume')+'</button>';
       overlay.classList.remove("hidden");
       $("playBtn").addEventListener("click",()=>{ state="playing"; overlay.classList.add("hidden"); last=performance.now(); startMusic(); });
     } else if(state==="paused"){ state="playing"; overlay.classList.add("hidden"); last=performance.now(); startMusic(); }
@@ -1081,29 +1089,29 @@ import * as CG from "./crazy.js";           // CrazyGames v3 SDK(广告/存档/�
   let settingsResume=false;
   function fsRowHTML(){
     if(isStandalone) return '';
-    if(isIOS || !fsSupported) return '<button class="srow" data-act="a2hs"><span>全屏 · 添加到主屏幕</span><span class="sw arrow">›</span></button>';
-    return '<button class="srow" data-act="fs"><span>全屏</span><span class="sw arrow">›</span></button>';
+    if(isIOS || !fsSupported) return '<button class="srow" data-act="a2hs"><span>'+t('settings_fs_a2hs')+'</span><span class="sw arrow">›</span></button>';
+    return '<button class="srow" data-act="fs"><span>'+t('settings_fs')+'</span><span class="sw arrow">›</span></button>';
   }
   function sheetHTML(){
-    const sw=(on,label,k)=>'<button class="srow" data-tog="'+k+'"><span>'+label+'</span><span class="sw'+(on?' on':'')+'">'+(on?'开':'关')+'</span></button>';
+    const sw=(on,label,k)=>'<button class="srow" data-tog="'+k+'"><span>'+label+'</span><span class="sw'+(on?' on':'')+'">'+(on?t('settings_on'):t('settings_off'))+'</span></button>';
     const tracks = musicOn
-      ? '<div class="trackSel">'+TRACKS.map((t,i)=>'<b class="'+(i===musicTrack?'on':'')+'" data-track="'+i+'">'+t.name+'</b>').join('')+'</div>'
+      ? '<div class="trackSel">'+TRACKS.map((tk,i)=>'<b class="'+(i===musicTrack?'on':'')+'" data-track="'+i+'">'+t('track_'+i)+'</b>').join('')+'</div>'
       : '';
     return '<div class="scard">'+
       '<div class="sgrip"></div>'+
-      '<h3>设置</h3>'+
+      '<h3>'+t('settings_title')+'</h3>'+
       '<div class="sgroup">'+
-        sw(ghostOn,'落点预览','ghost')+
-        sw(soundOn,'音效','sound')+
-        sw(musicOn,'背景音乐','music')+ tracks+
+        sw(ghostOn,t('settings_ghost'),'ghost')+
+        sw(soundOn,t('settings_sound'),'sound')+
+        sw(musicOn,t('settings_music'),'music')+ tracks+
       '</div>'+
       '<div class="sgroup">'+
-        '<button class="srow" data-act="rules"><span>玩法说明</span><span class="sw arrow">›</span></button>'+
+        '<button class="srow" data-act="rules"><span>'+t('settings_rules')+'</span><span class="sw arrow">›</span></button>'+
         fsRowHTML()+
       '</div>'+
-      (settingsResume?'<button class="sbtn" data-act="resume">继续游戏</button>':'')+
-      '<button class="sbtn ghost" data-act="menu">回主菜单</button>'+
-      '<button class="sbtn ghost" data-act="close">关闭</button>'+
+      (settingsResume?'<button class="sbtn" data-act="resume">'+t('settings_resume')+'</button>':'')+
+      '<button class="sbtn ghost" data-act="menu">'+t('settings_menu')+'</button>'+
+      '<button class="sbtn ghost" data-act="close">'+t('settings_close')+'</button>'+
     '</div>';
   }
   function renderSheet(){ const s=$("sheet"); if(s) s.innerHTML=sheetHTML(); }
@@ -1144,15 +1152,14 @@ import * as CG from "./crazy.js";           // CrazyGames v3 SDK(广告/存档/�
   voff=Array.from({length:ROWS},()=>new Float32Array(COLS));
   vscale=Array.from({length:ROWS},()=>{const a=new Float32Array(COLS); a.fill(1); return a;});
   vmode=Array.from({length:ROWS},()=>new Uint8Array(COLS));
-  $("foot").textContent = isMobile
-    ? "轻点=旋转 · 左右拖=移动 · 向下滑=落地"
-    : "← → 移动 · ↑ 旋转 · ↓ 加速 · 空格 速降 · P 暂停";
+  $("foot").textContent = isMobile ? t('foot_mobile') : t('foot_desktop');
   next=newPiece(); current=newPiece();
   // 新玩家:送 1 个炸弹,让局内道具栏第一次就出现(自带教学),并补发玩法说明
   try{ if(!localStorage.getItem("plox_started")){ localStorage.setItem("plox_started","1");
     getCoins(); if(getItem("bomb")===0 && getItem("bombBig")===0) addItem("bomb",1); } }catch(e){}
   const seenRules=(()=>{ try{ return !!localStorage.getItem("plox_seen_rules"); }catch(e){ return true; } })();
   CG.init().then(()=>{ CG.loadingStart(); CG.loadingStop(); });   // 初始化 CrazyGames SDK(不在 CG 上则自动降级)
+  applyStatic();   // 本地化静态标签(HUD/侧栏)— 在显示菜单前先设好
   resize(); if(seenRules) showMenu(); else showRules(true); requestAnimationFrame(loop);
 
   // ---------- 调试钩子(仅 ?debug=1)----------
@@ -1174,7 +1181,7 @@ import * as CG from "./crazy.js";           // CrazyGames v3 SDK(广告/存档/�
   }
 
   // ---------- PWA ----------
-  if("serviceWorker" in navigator && !/[?&]nosw=1/.test(location.search) && !IS_TEST){   // 测试版不装 SW,永远拿最新
+  if("serviceWorker" in navigator && !/[?&]nosw=1/.test(location.search) && !IS_TEST && !window.CrazyGames){   // 测试版/CrazyGames(iframe)不装 SW
     window.addEventListener("load",()=>{ navigator.serviceWorker.register("./sw.js").catch(()=>{}); });
   }
 })();

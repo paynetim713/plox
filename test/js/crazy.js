@@ -9,6 +9,8 @@ let env = "disabled";    // 'local' | 'crazygames' | 'disabled'
 let ready = false;
 let adActive = false;
 let hooks = { adStart() {}, adEnd() {} };
+let _muted = false;          // 平台静音状态(SDK.game.settings.muteAudio)
+let _muteCb = function () {}; // 静音变化回调(由 main.js 注入:停/复音乐)
 
 function getSDK() { try { return (window.CrazyGames && window.CrazyGames.SDK) || null; } catch (e) { return null; } }
 function game() { try { return SDK && SDK.game; } catch (e) { return null; } }
@@ -25,9 +27,26 @@ export async function init() {
       else if (typeof SDK.getEnvironment === "function") env = await SDK.getEnvironment();
       else env = "crazygames";
     } catch (_) { env = "crazygames"; }
+    // 平台静音:读初始值 + 监听变化(SDK 静音优先于游戏内开关;本地可用 ?muteAudio=true 测)
+    try {
+      var gm = SDK.game;
+      if (gm) {
+        if (gm.settings && typeof gm.settings.muteAudio === "boolean") _muted = gm.settings.muteAudio;
+        if (typeof gm.addSettingsChangeListener === "function") {
+          gm.addSettingsChangeListener(function (s) {
+            var m = !!(s && s.muteAudio);
+            if (m !== _muted) { _muted = m; try { _muteCb(_muted); } catch (e) {} }
+          });
+        }
+      }
+    } catch (e) {}
     ready = true;
   } catch (e) { SDK = null; }   // 初始化异常 → 彻底降级
 }
+
+// 平台静音状态 + 变化回调(main.js 用:beep/音乐都要 AND !muted())
+export function muted() { return _muted; }
+export function onMuteChange(cb) { _muteCb = cb || function () {}; }
 
 // 是否真的在 CrazyGames 上(决定要不要显示"看广告"类按钮)
 export function enabled() { return !!(ready && SDK && SDK.ad && env !== "disabled"); }
