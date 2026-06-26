@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600" width="600" height="600">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1c0740"/><stop offset="1" stop-color="#0a0118"/>
+    </linearGradient>
+    <radialGradient id="aur" cx="32%" cy="22%" r="75%">
+      <stop offset="0" stop-color="#3a1170" stop-opacity=".9"/><stop offset="1" stop-color="#3a1170" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity=".45"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="gMag" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff86ef"/><stop offset="1" stop-color="#d23db0"/></linearGradient>
+    <linearGradient id="gCya" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#74d8ff"/><stop offset="1" stop-color="#2a9fe0"/></linearGradient>
+    <linearGradient id="gGrn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#83e3a4"/><stop offset="1" stop-color="#3cb469"/></linearGradient>
+    <linearGradient id="gPur" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#caa0ff"/><stop offset="1" stop-color="#9a5fe0"/></linearGradient>
+  </defs>
+  <!-- 方形满铺背景:无圆角(抖音会自己加圆角/遮罩) -->
+  <rect width="600" height="600" fill="url(#bg)"/>
+  <rect width="600" height="600" fill="url(#aur)"/>
+  <!-- 2×2 宝石方块组(轻微旋转) -->
+  <g transform="rotate(-8 300 300)">
+    <g><rect x="118" y="118" width="172" height="172" rx="40" fill="url(#gMag)"/><rect x="140" y="140" width="128" height="46" rx="22" fill="url(#gloss)"/></g>
+    <g><rect x="310" y="118" width="172" height="172" rx="40" fill="url(#gCya)"/><rect x="332" y="140" width="128" height="46" rx="22" fill="url(#gloss)"/></g>
+    <g><rect x="118" y="310" width="172" height="172" rx="40" fill="url(#gGrn)"/><rect x="140" y="332" width="128" height="46" rx="22" fill="url(#gloss)"/></g>
+    <g><rect x="310" y="310" width="172" height="172" rx="40" fill="url(#gPur)"/><rect x="332" y="332" width="128" height="46" rx="22" fill="url(#gloss)"/></g>
+  </g>
+</svg>
