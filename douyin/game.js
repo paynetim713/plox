@@ -7,6 +7,7 @@
 // ============================================================
 var P = require('./js/platform-tt.js');
 var UI = require('./js/uikit.js');
+var Engine = require('./js/engine.js');
 
 // ---------- 1) 屏上画布(首个 createCanvas() = 唯一屏上画布)----------
 var canvas = tt.createCanvas();
@@ -34,6 +35,15 @@ function beep(freq, dur, type, vol) {
 }
 tt.onShow(function () { P.audioResume(); });
 tt.onHide(function () { /* 接入主体后:在此 stopMusic() */ });
+
+// ---------- 引擎实例 + 进入游戏 ----------
+var lastDiff = 'normal';
+var eng = Engine({
+  beep: beep,
+  onGameOver: function () { UI.show('gameover'); },
+  onStageUp: function (level) { /* 关卡提升:经济/金币不在本移植内 */ }
+});
+function startGame(diff) { lastDiff = diff || 'normal'; eng.reset(lastDiff); UI.show('play'); }
 
 // ---------- 3) 触摸 → 命中判定(替代 DOM 事件 + overlay)----------
 //  抬手用 changedTouches(touches 在 touchend 为空);首次触摸激活音频。
@@ -73,27 +83,120 @@ UI.register('title', {
   },
   buttons: function () {
     var s = this._start;
-    return s ? [{ x: s.x, y: s.y, w: s.w, h: s.h, onTap: function () { beep(660, 0.08, 'sine', 0.12); beep(990, 0.06, 'triangle', 0.06); UI.show('play'); } }] : [];
+    return s ? [{ x: s.x, y: s.y, w: s.w, h: s.h, onTap: function () { beep(660, 0.08, 'sine', 0.12); beep(990, 0.06, 'triangle', 0.06); startGame('normal'); } }] : [];
   }
 });
 
-// ---------- 屏幕:游戏页(占位 —— 棋盘主体接入处)----------
+// ---------- 屏幕:游戏页(棋盘主体)----------
+// 棋盘布局在 play 屏内算好,传给 eng.draw;tick 也由本屏的 draw 驱动(dt 来自 uikit)。
+function boardLayout() {
+  var cell = Math.floor(Math.min((W - 24) / 7, (H - safe.top - 150) / 14));
+  var bw = cell * 7, bh = cell * 14, ox = Math.floor((W - bw) / 2), oy = safe.top + 92;
+  return { cell: cell, bw: bw, bh: bh, ox: ox, oy: oy };
+}
 UI.register('play', {
   draw: function (ctx, dt, env) {
+    var lay = boardLayout();
+    // 背景
     ctx.fillStyle = '#0a0118'; ctx.fillRect(0, 0, W, H);
-    // 画一个 7×14 棋盘网格占位,确认坐标/安全区/retina 对得上
-    var COLS = 7, ROWS = 14;
-    var cell = Math.floor(Math.min((W - 24) / COLS, (H - safe.top - 120) / ROWS));
-    var bw = cell * COLS, bh = cell * ROWS, ox = (W - bw) / 2, oy = safe.top + 70;
-    ctx.fillStyle = 'rgba(18,4,40,0.9)'; UI.rr(ctx, ox - 4, oy - 4, bw + 8, bh + 8, 14); ctx.fill();
-    ctx.strokeStyle = 'rgba(150,90,255,0.14)'; ctx.lineWidth = 1;
-    for (var c = 0; c <= COLS; c++) { ctx.beginPath(); ctx.moveTo(ox + c * cell, oy); ctx.lineTo(ox + c * cell, oy + bh); ctx.stroke(); }
-    for (var r = 0; r <= ROWS; r++) { ctx.beginPath(); ctx.moveTo(ox, oy + r * cell); ctx.lineTo(ox + bw, oy + r * cell); ctx.stroke(); }
-    ctx.fillStyle = '#9b86c9'; ctx.textAlign = 'center'; ctx.font = '600 15px sans-serif';
-    ctx.fillText('棋盘主体移植中 · 点任意处返回', W / 2, oy + bh + 40);
-  },
-  onTap: function () { beep(330, 0.05, 'sine', 0.08); UI.show('title'); }
+    // 顶部 HUD 行(屏幕坐标系):分数 / 关卡 / 消除 + 目标
+    var g = eng.goalInfo();
+    ctx.textBaseline = 'alphabetic';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#9b86c9'; ctx.font = '600 12px sans-serif';
+    ctx.fillText('分数', lay.ox, safe.top + 30);
+    ctx.fillText('关卡', lay.ox + lay.bw * 0.38, safe.top + 30);
+    ctx.fillText('消除', lay.ox + lay.bw * 0.70, safe.top + 30);
+    ctx.fillStyle = '#fff'; ctx.font = '800 20px sans-serif';
+    ctx.fillText(String(eng.score()), lay.ox, safe.top + 54);
+    ctx.fillText(String(eng.level()), lay.ox + lay.bw * 0.38, safe.top + 54);
+    ctx.fillText(String(eng.cleared()), lay.ox + lay.bw * 0.70, safe.top + 54);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#ffd86a'; ctx.font = '700 13px sans-serif';
+    ctx.fillText(g.have + '/' + g.need, lay.ox + lay.bw, safe.top + 78);
+    ctx.textAlign = 'left';
+    // 驱动逻辑 + 棋盘绘制
+    eng.tick(dt);
+    eng.draw(ctx, { cell: lay.cell, ox: lay.ox, oy: lay.oy });
+  }
 });
+
+// ---------- 屏幕:结算页 ----------
+UI.register('gameover', {
+  draw: function (ctx, dt, env) {
+    ctx.fillStyle = '#0a0118'; ctx.fillRect(0, 0, W, H);
+    var a1 = ctx.createRadialGradient(W * 0.5, H * 0.32, 0, W * 0.5, H * 0.32, W * 0.8);
+    a1.addColorStop(0, 'rgba(43,11,88,0.7)'); a1.addColorStop(1, 'rgba(43,11,88,0)');
+    ctx.fillStyle = a1; ctx.fillRect(0, 0, W, H);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ff7ad8'; ctx.font = '800 ' + Math.round(W * 0.1) + 'px sans-serif';
+    ctx.fillText('结 束', W / 2, safe.top + H * 0.22);
+    ctx.fillStyle = '#9b86c9'; ctx.font = '600 14px sans-serif';
+    ctx.fillText('本局得分', W / 2, safe.top + H * 0.32);
+    ctx.fillStyle = '#fff'; ctx.font = '900 ' + Math.round(W * 0.12) + 'px sans-serif';
+    ctx.fillText(String(eng.score()), W / 2, safe.top + H * 0.39);
+    ctx.fillStyle = '#d9c8ff'; ctx.font = '600 15px sans-serif';
+    ctx.fillText('关卡 ' + eng.level(), W / 2, safe.top + H * 0.46);
+    // 再来一局
+    var bw = Math.min(300, W * 0.72), bh = 56, bx = (W - bw) / 2, by = H * 0.58;
+    var cg = ctx.createLinearGradient(bx, 0, bx + bw, 0); cg.addColorStop(0, '#27c2ff'); cg.addColorStop(1, '#ff3df0');
+    ctx.fillStyle = cg; UI.rr(ctx, bx, by, bw, bh, 18); ctx.fill();
+    ctx.fillStyle = '#0c0220'; ctx.font = '800 20px sans-serif'; ctx.fillText('再 来 一 局', W / 2, by + bh / 2 + 1);
+    this._again = { x: bx, y: by, w: bw, h: bh };
+    // 返回
+    var rbw = Math.min(300, W * 0.72), rbh = 48, rbx = (W - rbw) / 2, rby = by + bh + 16;
+    ctx.strokeStyle = 'rgba(150,90,255,0.45)'; ctx.lineWidth = 1.5; UI.rr(ctx, rbx, rby, rbw, rbh, 16); ctx.stroke();
+    ctx.fillStyle = '#b9a6e0'; ctx.font = '700 16px sans-serif'; ctx.fillText('返 回', W / 2, rby + rbh / 2 + 1);
+    this._back = { x: rbx, y: rby, w: rbw, h: rbh };
+  },
+  buttons: function () {
+    var a = this._again, b = this._back, out = [];
+    if (a) out.push({ x: a.x, y: a.y, w: a.w, h: a.h, onTap: function () { beep(660, 0.08, 'sine', 0.12); startGame(lastDiff); } });
+    if (b) out.push({ x: b.x, y: b.y, w: b.w, h: b.h, onTap: function () { beep(330, 0.05, 'sine', 0.08); UI.show('title'); } });
+    return out;
+  }
+});
+
+// ---------- 棋盘手势(全局注册一次,仅在 play 屏生效)----------
+// 忠实移植 main.js 手势模型:轴锁 1.5、按起点累计逐格移动、下滑=hardDrop(220ms 去抖)、轻点=旋转、多指中止。
+var tS = null, lastHardT = 0;
+tt.onTouchStart(function (e) {
+  if (UI.name() !== 'play') return;
+  var ts = e.touches || [];
+  if (ts.length > 1) { tS = null; return; }
+  var t = ts[0]; if (!t) return;
+  tS = { x: t.clientX, y: t.clientY, steps: 0, axis: null, moved: false };
+});
+tt.onTouchMove(function (e) {
+  if (UI.name() !== 'play') return;
+  if (!tS || eng.state() !== 'playing') return;
+  var ts = e.touches || [];
+  if (ts.length > 1) return;
+  var t = ts[0]; if (!t) return;
+  var cell = boardLayout().cell;
+  var dx = t.clientX - tS.x, dy = t.clientY - tS.y, adx = Math.abs(dx), ady = Math.abs(dy);
+  if (!tS.axis && (adx > cell * 0.4 || ady > cell * 0.4))
+    tS.axis = (ady > adx * 1.5) ? 'v' : 'h';
+  if (tS.axis === 'h') {
+    var want = Math.round(dx / cell);
+    while (tS.steps < want) { eng.move(1); tS.steps++; tS.moved = true; }
+    while (tS.steps > want) { eng.move(-1); tS.steps--; tS.moved = true; }
+  }
+});
+tt.onTouchEnd(function (e) {
+  if (UI.name() !== 'play') return;
+  var ts = e.touches || [];
+  if (ts.length > 0) { tS = null; return; }
+  if (!tS) return;
+  var t = e.changedTouches && e.changedTouches[0]; if (!t) { tS = null; return; }
+  var cell = boardLayout().cell;
+  var dx = t.clientX - tS.x, dy = t.clientY - tS.y, now = Date.now();
+  if (tS.axis === 'v' || (tS.axis !== 'h' && dy > cell * 0.5 && dy > Math.abs(dx) * 1.2)) {
+    if (now - lastHardT > 220) { lastHardT = now; eng.hardDrop(); }
+  } else if (!tS.moved) eng.rotate();
+  tS = null;
+});
+tt.onTouchCancel(function () { tS = null; });
 
 // ---------- 5) 主循环 ----------
 var last = 0;
