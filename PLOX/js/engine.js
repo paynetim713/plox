@@ -267,6 +267,20 @@ module.exports = function createEngine(deps) {
   }
   function ghostRow() { var r = current.row; while (valid(r + 1, current.col, current.colors)) r++; return r; }
   function setSoftDrop(b) { softDrop = !!b; }
+  // 复活:炸掉最下方 6 行 + 塌落,然后继续(金币/广告判定在 game.js 里做)
+  function revive() {
+    if (state !== "gameover") return;
+    var lo = Math.max(0, ROWS - 6);
+    for (var r = ROWS - 1; r >= lo; r--) for (var c = 0; c < COLS; c++) {
+      if (board[r][c] != null) { spawnParticles(c, r, board[r][c], 7); board[r][c] = null; voff[r][c] = 0; vmode[r][c] = 0; vscale[r][c] = 1; }
+    }
+    fallingJunk.length = 0; junkWarn.length = 0; clearing = null;
+    gravity();
+    shakeT = 220; freezeT = 60; beep(70, .26, "sawtooth", .14); beep(150, .18, "square", .1); beep(40, .32, "triangle", .1);
+    revives++;
+    _gameOverFired = false; sub = "control"; state = "playing"; dropAccum = 0; softDrop = false;
+    spawn();
+  }
 
   // ---------- 特效 ----------
   function spawnParticles(c, r, idx, n) {
@@ -550,6 +564,8 @@ module.exports = function createEngine(deps) {
     move: move,
     setSoftDrop: setSoftDrop,
     hardDrop: hardDrop,
+    revive: revive,
+    reviveCount: function () { return revives; },
     state: function () { return state; },
     score: function () { return score; },
     level: function () { return level; },
