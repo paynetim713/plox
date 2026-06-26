@@ -504,7 +504,7 @@ import { t, lang, setLang, applyStatic } from "./i18n.js";   // 国际化:默认
         '</div>'+
         '<div class="link" id="toMenu">'+t('settle_menu')+'</div>'+
       '</div>';
-    $("againBtn").addEventListener("click", ()=>{ start(); CG.midgame(); });   // 重开之间插一条插屏广告(SDK 自带频次控制)
+    $("againBtn").addEventListener("click", ()=>{ CG.midgameThen(start); });   // 先播插屏广告,播完/失败/超时再开局(广告期间不运行游戏,杜绝卡死)
     if($("uploadBtn")) $("uploadBtn").addEventListener("click", ()=>showNameEntry());
     $("shopBtn2").addEventListener("click", ()=>showShop("settle"));
     $("lbBtn2").addEventListener("click", ()=>showLeaderboard());
@@ -901,10 +901,9 @@ import { t, lang, setLang, applyStatic } from "./i18n.js";   // 国际化:默认
   let last=0, _lastState="", adPaused=false;
   function loop(t){
     const dt=Math.min(60,t-(last||t)); last=t;
-    if(adPaused){ render(); requestAnimationFrame(loop); return; }  // 广告播放中:画面定格、不推进、静音(见 CG.setHooks)
     if(state!==_lastState){ _lastState=state; document.body.classList.toggle("ingame", state==="playing"); resize(); }  // 暂停键/道具栏只在进行中显示 + 重排
     if(freezeT>0){ freezeT=Math.max(0,freezeT-dt); render(); requestAnimationFrame(loop); return; }  // 顿帧:全局短暂定格
-    if(state==="playing"){
+    if(state==="playing" && !adPaused){   // 广告播放时只暂停推进,绝不 return 整个循环(避免广告回调丢失把游戏卡死)
       if(sub==="control"){
         dropAccum+=dt; const iv=softDrop?Math.min(55,dropInterval):dropInterval;
         while(dropAccum>=iv){ dropAccum-=iv; stepDown(); if(sub!=="control")break; }

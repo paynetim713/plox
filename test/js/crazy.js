@@ -53,8 +53,11 @@ export function enabled() { return !!(ready && SDK && SDK.ad && env !== "disable
 
 // 广告开始/结束的钩子:由 main.js 注入(静音 + 暂停 / 恢复)
 export function setHooks(h) { hooks = Object.assign(hooks, h || {}); }
-function onStart() { if (adActive) return; adActive = true; try { hooks.adStart(); } catch (e) {} }
-function onEnd() { if (!adActive) return; adActive = false; try { hooks.adEnd(); } catch (e) {} }
+let _adTimer = null;
+function clearAdTimer() { if (_adTimer) { clearTimeout(_adTimer); _adTimer = null; } }
+// 看门狗:广告开始后即便没有任何结束回调(填充失败/卡住/被拦),35s 也强制结束,绝不让游戏永久卡死
+function onStart() { if (adActive) return; adActive = true; clearAdTimer(); _adTimer = setTimeout(onEnd, 35000); try { hooks.adStart(); } catch (e) {} }
+function onEnd() { if (!adActive) return; adActive = false; clearAdTimer(); try { hooks.adEnd(); } catch (e) {} }
 
 // 生命周期信号(对 CrazyGames 的指标/广告时机很重要)
 export function loadingStart() { try { game() && game().sdkGameLoadingStart(); } catch (e) {} }
@@ -69,6 +72,23 @@ export function midgame() {
   try {
     SDK.ad.requestAd("midgame", { adStarted: onStart, adFinished: onEnd, adError: () => onEnd() });
   } catch (e) { onEnd(); }
+}
+
+// 插屏广告:播完(或失败/不可用/超时)后再执行 cb。广告期间游戏不运行 → 无卡死风险。
+// 不在 CrazyGames 上(或广告不可用)立即执行 cb,体验不变。
+export function midgameThen(cb) {
+  cb = cb || function () {};
+  if (!enabled()) { cb(); return; }
+  var done = false;
+  var finish = function () { if (done) return; done = true; try { cb(); } catch (e) {} };
+  try {
+    SDK.ad.requestAd("midgame", {
+      adStarted: onStart,
+      adFinished: function () { onEnd(); finish(); },
+      adError: function () { onEnd(); finish(); },
+    });
+    setTimeout(finish, 12000);   // 兜底:广告万一卡住也不挡住玩家重开
+  } catch (e) { onEnd(); finish(); }
 }
 
 // 激励视频(看广告复活)。看完 → onReward;失败/未看完 → onFail(不发奖励)。
