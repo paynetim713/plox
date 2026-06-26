@@ -247,6 +247,27 @@ module.exports = function createEngine(deps) {
     }
   }
 
+  // ---------- 道具:炸弹(炸掉最下方 N 行)----------
+  // port 自网页版 useBomb 的棋盘效果部分;库存/扣件在 game.js 里做,这里只做盘面 + 返回清掉的方块数。
+  function useBomb(rows) {
+    if (state !== "playing" || sub !== "control") return 0;   // 只在可操作时使用,避免与消除动画/暂停冲突
+    rows = rows || 0;
+    var n = 0;
+    for (var r = ROWS - 1; r >= Math.max(0, ROWS - rows); r--) {
+      for (var c = 0; c < COLS; c++) {
+        if (board[r][c] != null) {
+          spawnParticles(c, r, board[r][c]); board[r][c] = null; voff[r][c] = 0; vmode[r][c] = 0; vscale[r][c] = 1; n++;
+        }
+      }
+    }
+    gravity();
+    score += n * 5;
+    shakeT = Math.min(260, 160 + n * 6); freezeT = Math.min(90, 50);
+    beep(70, .22, "sawtooth", .13); beep(150, .16, "square", .1); beep(40, .3, "triangle", .1);
+    resolveJunk();        // 炸后塌落可能形成的新消除一并结算
+    return n;
+  }
+
   // ---------- 操作 ----------
   function playing() { return state === "playing" && sub === "control"; }
   function move(d) { if (playing() && valid(current.row, current.col + d, current.colors)) { current.col += d; beep(330, .03, "sine", .05); } }
@@ -564,6 +585,7 @@ module.exports = function createEngine(deps) {
     move: move,
     setSoftDrop: setSoftDrop,
     hardDrop: hardDrop,
+    useBomb: useBomb,
     revive: revive,
     reviveCount: function () { return revives; },
     state: function () { return state; },
