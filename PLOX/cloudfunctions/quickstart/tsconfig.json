@@ -1,0 +1,13 @@
+{
+    "compilerOptions": {
+        "module": "CommonJS",
+        "allowSyntheticDefaultImports": true,
+        "target": "es6",
+        "moduleResolution": "node",
+        "strict": false,
+        "allowJs": true,
+        "skipLibCheck": true,
+        "noEmitOnError": true
+    },
+  "include": ["./**/*.ts"]
+}

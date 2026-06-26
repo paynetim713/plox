@@ -1,0 +1,22 @@
+{
+    "setting": {
+        "urlCheck": true,
+        "es6": true,
+        "postcss": true,
+        "minified": true,
+        "newFeature": true,
+        "autoCompile": true,
+        "compileHotReLoad": true,
+        "nativeCompile": true
+    },
+    "appid": "tt806df6d01e09fd4d02",
+    "projectname": "PLOX",
+    "douyinProjectType": "native",
+    "cloudfunctionRoot": "cloudfunctions/",
+    "condition": {
+        "game": {
+            "current": -1,
+            "list": []
+        }
+    }
+}

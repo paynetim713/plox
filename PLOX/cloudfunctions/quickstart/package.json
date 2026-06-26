@@ -1,0 +1,14 @@
+{
+  "author": "",
+  "dependencies": {
+    "@open-dy/node-server-sdk": "^1.0.0",
+    "@volcengine/tos-sdk": "^2.6.10",
+    "axios": "^1.6.1",
+    "dayjs": "^1.11.10",
+    "lodash": "^4.17.21"
+  },
+  "description": "",
+  "license": "ISC",
+  "name": "dy-cloud-func-project",
+  "version": "1.0.0"
+}

@@ -1,2 +1,7 @@
 .claude/
 .DS_Store
+
+# Douyin project: ignore unused Java backend sample + deps
+PLOX/java-springboot-demo/
+PLOX/**/node_modules/
+node_modules/
