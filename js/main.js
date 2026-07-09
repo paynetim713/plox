@@ -38,12 +38,12 @@ import { createUI } from "./ui.js";
     dom:{ elScore, elHigh, elLevel, elCleared, elMaxCombo, elCoinNum, elItembar } });
 
   // ---------- 模型(注入 音频 / 特效 / HUD / 流程回调)----------
-  const on={ gameOver:()=>ui.showReviveOffer(), spawn:()=>{ if(!isMobile) view.drawNext(); } };
+  const on={ gameOver:()=>ui.showReviveOffer(), levelFail:()=>ui.showLevelFail(), spawn:()=>{ if(!isMobile) view.drawNext(); } };
   const model=createModel({ audio, fx:view.fx, ui:view.hud, on });
   view.bind(model);
 
   // ---------- 界面(注入 流程回调)----------
-  const ctrl={ start, doRevive };
+  const ctrl={ start, doRevive, doRetry };
   const ui=createUI({ overlay, $, model, view, audio, lb, ctrl, isMobile });
 
   // ---------- 流程 ----------
@@ -55,6 +55,12 @@ import { createUI } from "./ui.js";
   }
   function doRevive(rows){
     model.revive(rows);   // 普通复活 6 行;看广告复活传 12
+    overlay.classList.add("hidden");
+    model.spawn();
+    if(model.state==="playing"){ last=performance.now(); startMusic(); }
+  }
+  function doRetry(){   // 闯关:重试本关
+    model.retryLevel();
     overlay.classList.add("hidden");
     model.spawn();
     if(model.state==="playing"){ last=performance.now(); startMusic(); }
@@ -168,12 +174,13 @@ import { createUI } from "./ui.js";
     window.__plox={
       stats:()=>({ filled: model.board.reduce((a,row)=>a+row.filter(x=>x!=null).length,0),
         perCol: Array.from({length:COLS},(_,c)=>{let n=0;for(let r=0;r<ROWS;r++)if(model.board[r][c]!=null)n++;return n;}),
-        pieceUntilJunk:model.pieceUntilJunk, junkMin:model.junkMin, junkMax:model.junkMax, sub:model.sub, state:model.state, diffKey:model.diffKey,
+        pieceUntilJunk:model.pieceUntilJunk, junkMin:model.junkMin, junkMax:model.junkMax, sub:model.sub, state:model.state, diffKey:model.diffKey, mode:model.mode,
         stage:model.level, goal:stageGoal(model.level), prog:model.cleared-model.stageStart, cleared:model.cleared }),
       forceJunk:()=>model.dropJunk(),
       junk:()=>model.fallingJunk.map(g=>({c:g.c,y:Math.round(g.y*100)/100,off:g.cells.map(cl=>cl.dc+","+cl.dr)})),
       falling:()=>model.fallingJunk.map(j=>({c:j.c,y:Math.round(j.y*100)/100})),
       tick:(ms)=>model.updateAnim(ms||16),
+      frame:(ms)=>{ const dt=ms||16; if(model.state==="playing"){ if(model.sub==="control") model.dropTick(dt); else if(model.sub==="resolving") model.resolveTick(dt); } model.updateAnim(dt); },
       coins:()=>getCoins(), give:(n)=>{ addCoins(n||5); view.hud.syncCoins(); return getCoins(); },
       diamonds:()=>getDiamonds(), giveDia:(n)=>{ addDiamonds(n||50); return getDiamonds(); },
       grant:(id,n)=>{ addItem(id||"bomb",n||1); view.hud.renderItemBar(); return getItem(id||"bomb"); },

@@ -18,7 +18,7 @@ export function createModel(deps){
   let junkMin=3, junkMax=4, pieceUntilJunk=4, justJunked=false;
   let fallingJunk=[], junkWarn=[];
   let clearing=null, clearTimer=0, flashPulse=0;
-  let revives=0;
+  let revives=0, mode="endless", pendingLevelClear=false;   // mode: "endless" 无尽 / "campaign" 闯关
   let visRow=0, visCol=3, rotT=0;
   let high=0, diffKey="normal";
 
@@ -43,17 +43,26 @@ export function createModel(deps){
   const playing=()=>state==="playing"&&sub==="control";
 
   // ---------- 流程 ----------
-  function reset(){
+  // 按关数推导下落速度与乱入频率(确定性:闯关重试可直接跳到某关)
+  function applyLevelTuning(lvl){
+    const D=DIFFS[diffKey];
+    dropInterval=dropIntervalFor(baseInterval, lvl);
+    const red=Math.floor(lvl/2);   // 每 2 关乱入更频一档
+    junkMin=Math.max(D.floorMin, D.junkMin-red);
+    junkMax=Math.max(D.floorMax, D.junkMax-red);
+  }
+  function reset(startLevel){
+    startLevel = startLevel || 1;
     board=Array.from({length:ROWS},()=>Array(COLS).fill(null));
     voff=Array.from({length:ROWS},()=>new Float32Array(COLS));
     vscale=Array.from({length:ROWS},()=>{const a=new Float32Array(COLS); a.fill(1); return a;});
     vmode=Array.from({length:ROWS},()=>new Uint8Array(COLS));
-    score=0; cleared=0; level=1; combo=0; maxCombo=0; stageStart=0;
+    score=0; cleared=0; level=startLevel; combo=0; maxCombo=0; stageStart=0;
     const D=DIFFS[diffKey];
     baseInterval=D.baseInterval||PLAYER_INTERVAL; colorCount=FIXED_COLORS; pieceLen=PIECE_LEN;
-    junkMin=D.junkMin; junkMax=D.junkMax;
+    junkMin=D.junkMin; junkMax=D.junkMax; applyLevelTuning(startLevel);
     pieceUntilJunk=Math.min(junkMax, randInt(4,7)); justJunked=false;
-    dropInterval=baseInterval; dropAccum=0; softDrop=false; clearing=null; sub="control"; revives=0;
+    dropAccum=0; softDrop=false; clearing=null; sub="control"; revives=0; pendingLevelClear=false;
     fallingJunk.length=0; junkWarn.length=0; clearTimer=0; flashPulse=0; rotT=0;
     fx.resetFx();     // 清 particles/popups/banner/shakeT/freezeT
     refreshHigh();
@@ -108,12 +117,11 @@ export function createModel(deps){
   function checkStageUp(){
     if(cleared-stageStart >= stageGoal(level)){
       stageStart=cleared; level++;
-      dropInterval=dropIntervalFor(baseInterval, level);
-      if(level%2===0){ const D=DIFFS[diffKey];
-        junkMin=Math.max(D.floorMin, junkMin-1); junkMax=Math.max(D.floorMax, junkMax-1); }
+      applyLevelTuning(level);
       const reward = (level%5===0) ? 1 : 0;
       if(reward){ addCoins(reward); ui.syncCoins(); }
       recordBestStage(level);
+      if(mode==="campaign") pendingLevelClear=true;   // 闯关:过关后清空棋盘,开新一关
       fx.spawnStageBanner(level, reward);
     }
   }
@@ -143,8 +151,16 @@ export function createModel(deps){
   }
   function settle(){
     if(state!=="playing") return;
+    if(pendingLevelClear){ pendingLevelClear=false; clearBoardForNextLevel(); sub="control"; spawn(); return; }
     if(--pieceUntilJunk<=0){ pieceUntilJunk=randInt(junkMin,junkMax); dropJunk(); }
     sub="control"; spawn();
+  }
+  // 闯关过关:清空棋盘迎接新一关(不含 spawn,由 settle 接着 spawn)
+  function clearBoardForNextLevel(){
+    for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+      if(board[r][c]!=null){ fx.spawnParticles(c,r,board[r][c],4); board[r][c]=null; voff[r][c]=0; vmode[r][c]=0; vscale[r][c]=1; } }
+    fallingJunk.length=0; junkWarn.length=0; clearing=null;
+    pieceUntilJunk=Math.min(junkMax, randInt(4,7)); fx.shake(120);
   }
   function colFill(c){ let top=0; while(top<ROWS && board[top][c]==null) top++; return ROWS-top; }
   // 乱入块随机形状:横1 / 横2 / 竖1 / 竖2(横1≡竖1=单格)。整体缓降、逐格落地、不可操作
@@ -217,7 +233,17 @@ export function createModel(deps){
     state="gameover"; audio.stopMusic(); softDrop=false; beep(140,.25,"sawtooth",.15);
     if(score>high){ high=score; setBest(diffKey,score); ui.setHigh(high); }
     recordBestStage(level);
-    on.gameOver();
+    if(mode==="campaign") on.levelFail(); else on.gameOver();
+  }
+  // 闯关失败重试本关:清空棋盘,保留关数与分数,本关目标重新计(不含 spawn,由 Controller 接管)
+  function retryLevel(){
+    for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+      if(board[r][c]!=null){ fx.spawnParticles(c,r,board[r][c],4); board[r][c]=null; voff[r][c]=0; vmode[r][c]=0; vscale[r][c]=1; } }
+    fallingJunk.length=0; junkWarn.length=0; clearing=null;
+    stageStart=cleared; applyLevelTuning(level);
+    pieceUntilJunk=Math.min(junkMax, randInt(4,7));
+    fx.shake(160); fx.freeze(40);
+    sub="control"; state="playing"; dropAccum=0;
   }
   // 复活:炸掉最下方 rows 行(普通=6;看广告=12,2×)。不含 overlay/spawn/音乐,那些由 Controller 接管以保持原顺序
   function revive(rows){
@@ -298,11 +324,11 @@ export function createModel(deps){
     get fallingJunk(){return fallingJunk;}, get junkWarn(){return junkWarn;}, get visRow(){return visRow;}, get visCol(){return visCol;},
     get rotT(){return rotT;}, get revives(){return revives;}, get dropInterval(){return dropInterval;}, get colorCount(){return colorCount;},
     get pieceLen(){return pieceLen;}, get softDrop(){return softDrop;}, get pieceUntilJunk(){return pieceUntilJunk;},
-    get junkMin(){return junkMin;}, get junkMax(){return junkMax;}, get justJunked(){return justJunked;},
+    get junkMin(){return junkMin;}, get junkMax(){return junkMax;}, get justJunked(){return justJunked;}, get mode(){return mode;},
     // 写:setter(仅 Controller 需要写的几个)
-    setState(s){ state=s; }, setDiffKey(k){ diffKey=k; }, setSoftDrop(b){ softDrop=b; },
+    setState(s){ state=s; }, setDiffKey(k){ diffKey=k; }, setSoftDrop(b){ softDrop=b; }, setMode(m){ mode=m; },
     // 方法
-    reset, spawn, move, rotate, hardDrop, useBomb, dropTick, resolveTick, updateAnim, revive, ghostRow,
+    reset, spawn, move, rotate, hardDrop, useBomb, dropTick, resolveTick, updateAnim, revive, retryLevel, ghostRow,
     getBest, getBestStage, refreshHigh, dropJunk, stageGoal,
   };
 }

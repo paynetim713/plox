@@ -36,6 +36,9 @@ export function createUI({ overlay, $, model, view, audio, lb, ctrl, isMobile })
   }
   function showMenu(){
     model.setState("start"); model.refreshHigh();
+    const modeTab=(m,label,desc)=>{ const on=model.mode===m;
+      return '<button class="modeTab" data-mode="'+m+'" style="flex:1;max-width:150px;padding:8px 0;border-radius:12px;cursor:pointer;border:1.5px solid '+(on?'#ffd86a':'rgba(255,255,255,.14)')+';background:'+(on?'rgba(255,216,106,.15)':'rgba(255,255,255,.05)')+';color:'+(on?'#ffd86a':'#c9bce6')+';font-weight:800;font-size:14px;line-height:1.2">'+label+
+        '<div style="font-size:10px;font-weight:600;opacity:.7;margin-top:2px">'+desc+'</div></button>'; };
     overlay.innerHTML =
       '<div class="menu">'+
         '<div class="menuAmb"><i></i><i></i><i></i><i></i></div>'+
@@ -43,6 +46,8 @@ export function createUI({ overlay, $, model, view, audio, lb, ctrl, isMobile })
           '<div class="logo">PLOX</div><div class="logoSub">霓 虹 消 除</div></div>'+
         '<div class="bestRibbon">'+ICON.star+'<span>本难度最高</span><b id="bestVal">'+nfmt(model.getBest(model.diffKey))+'</b></div>'+
         '<div class="diffCards">'+diffCardHTML("easy")+diffCardHTML("normal")+diffCardHTML("hard")+'</div>'+
+        '<div class="modeTabs" style="display:flex;gap:8px;justify-content:center;margin:0 0 10px">'+
+          modeTab("endless","无尽","顶到底结束 · 冲分")+modeTab("campaign","闯关","一关一目标 · 可重试")+'</div>'+
         '<button class="playBtn" id="playBtn">'+ICON.play+'<span>开始</span></button>'+
         '<div class="menuActions">'+
           '<button class="actBtn shop" id="shopLink">'+ICON.cart+'<span>商店</span></button>'+
@@ -57,6 +62,7 @@ export function createUI({ overlay, $, model, view, audio, lb, ctrl, isMobile })
       [...overlay.querySelectorAll(".diffCard")].forEach(x=>x.classList.toggle("on",x.dataset.k===model.diffKey));
       model.refreshHigh(); const bv=$("bestVal"); if(bv) bv.textContent=nfmt(model.getBest(model.diffKey));
     }));
+    [...overlay.querySelectorAll(".modeTab")].forEach(b=>b.addEventListener("click",()=>{ model.setMode(b.dataset.mode); showMenu(); }));
     $("playBtn").addEventListener("click", ctrl.start);
     $("shopLink").addEventListener("click", ()=>showShop());
     $("lbLink").addEventListener("click", ()=>showLeaderboard());
@@ -237,6 +243,26 @@ export function createUI({ overlay, $, model, view, audio, lb, ctrl, isMobile })
     $("giveUp").addEventListener("click", showSettle);
   }
 
+  // ---------- 闯关失败(重试本关)----------
+  function showLevelFail(){
+    model.setState("gameover"); overlay.classList.remove("hidden"); view.hud.syncCoins();
+    overlay.innerHTML=
+      '<div class="ovr">'+
+        '<h1 class="ovTitle warn">第 '+model.level+' 关 失败</h1>'+
+        '<div class="ovScore">本关目标 <b>'+model.stageGoal(model.level)+'</b> · 就差一点</div>'+
+        '<div class="ovHint">重试本关从空棋盘重来;看广告清下方 12 行接着打</div>'+
+        '<div class="reviveBtns">'+
+          '<button class="play reviveBtn" id="retryBtn"><span>重试本关</span></button>'+
+          '<button class="play reviveBtn radAd" id="failAd"><span>📺 看广告复活 · 清 12 行</span></button>'+
+        '</div>'+
+        '<div class="link" id="failGiveUp">放弃,看结算</div>'+
+      '</div>';
+    overlay.classList.remove("hidden");
+    $("retryBtn").addEventListener("click", ctrl.doRetry);
+    $("failAd").addEventListener("click", ()=>{ showRewardedAd(()=>ctrl.doRevive(12), ()=>{}); });
+    $("failGiveUp").addEventListener("click", showSettle);
+  }
+
   // ---------- 结算 ----------
   const sc3=(k,v)=>'<div class="sc"><div class="sck">'+k+'</div><div class="scv">'+v+'</div></div>';
   function showSettle(){
@@ -363,6 +389,6 @@ export function createUI({ overlay, $, model, view, audio, lb, ctrl, isMobile })
 
   return {
     showMenu, showRules, showShop, showRecharge, showLeaderboard, showNameEntry,
-    showReviveOffer, showSettle, openSettings, showA2HS, isIOS, isStandalone,
+    showReviveOffer, showLevelFail, showSettle, openSettings, showA2HS, isIOS, isStandalone,
   };
 }

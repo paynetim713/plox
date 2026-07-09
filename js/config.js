@@ -14,8 +14,18 @@ function shade(hex, amt){
   const f=t=> amt>=0 ? Math.round(t+(255-t)*amt) : Math.round(t*(1+amt));
   return "rgb("+f(R)+","+f(G)+","+f(B)+")";
 }
-COLORS.forEach(c=>{ c.top=shade(c.fill,.16); c.dark=shade(c.fill,-.2); c.edge=shade(c.fill,-.34);
-  c.gfill=shade(c.fill,-.52); c.gedge=shade(c.fill,-.66); });   // 落点预览:压暗的实心色
+// 护眼:本色「降饱和 ds + 压暗 dl」——高饱和又高亮的颜色久看最累(手机满亮度尤甚)
+function mute(hex, ds, dl){
+  const n=parseInt(hex.slice(1),16); let R=(n>>16)&255, G=(n>>8)&255, B=n&255;
+  const L=0.299*R+0.587*G+0.114*B;            // 向自身灰度靠拢 = 降饱和
+  R=R+(L-R)*ds; G=G+(L-G)*ds; B=B+(L-B)*ds;
+  R*=(1-dl); G*=(1-dl); B*=(1-dl);             // 整体压暗
+  const h=x=>Math.max(0,Math.min(255,Math.round(x))).toString(16).padStart(2,"0");
+  return "#"+h(R)+h(G)+h(B);
+}
+COLORS.forEach(c=>{ c.fill=mute(c.fill, 0.12, 0.03); c.glow=mute(c.glow, 0.15, 0.05); });   // 只轻降饱和:保持鲜亮、和落点预览拉开;伤眼的是炫光不是本色
+COLORS.forEach(c=>{ c.top=shade(c.fill,.10); c.dark=shade(c.fill,-.22); c.edge=shade(c.fill,-.36);
+  c.gfill=shade(c.fill,-.52); c.gedge=shade(c.fill,-.66); });   // 顶部提亮 .10(适度立体、不炫光)
 
 // 每组固定 3 个随机色块;难度 = 系统「随机乱入」方块组的频率(junkMin/junkMax = 每隔多少个方块乱入一波)
 export const FIXED_COLORS = 5;

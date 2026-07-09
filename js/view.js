@@ -79,7 +79,7 @@ export function createView({ cv, ctx, nextCv, nctx, isMobile, audio, dom }){
       gr.addColorStop(0,col.top); gr.addColorStop(.52,col.fill); gr.addColorStop(1,col.dark); return gr; });
     // 顶部玻璃高光(白→透明),按 CELL 缓存一次、所有方块复用,不每帧重建(省性能)
     glossGrad=ctx.createLinearGradient(0,-H0,0,-H0+H0*0.9);
-    glossGrad.addColorStop(0,"rgba(255,255,255,0.52)"); glossGrad.addColorStop(1,"rgba(255,255,255,0)");
+    glossGrad.addColorStop(0,"rgba(255,255,255,0.16)"); glossGrad.addColorStop(1,"rgba(255,255,255,0)");   // 护眼:柔和低亮高光(远低于原 0.52)
     bgGrad=ctx.createLinearGradient(0,0,0,ROWS*CELL);
     bgGrad.addColorStop(0,"#120428"); bgGrad.addColorStop(1,"#070114");
   }
@@ -134,9 +134,9 @@ export function createView({ cv, ctx, nextCv, nctx, isMobile, audio, dom }){
     const rad=cell*0.2;
     g.save();
     g.translate(cx,cy); if(sc!==1) g.scale(sc,sc);
-    if(opt.ghost){
-      g.fillStyle=col.gfill; rr(g,-h,-h,s0,s0,rad); g.fill();
-      g.strokeStyle=col.gedge; g.lineWidth=Math.max(1.5,cell*0.045);
+    if(opt.ghost){   // 落点预览:半透明填充 + 清晰描边 = 明显是「空心提示」,不会和实心方块撞色
+      g.globalAlpha=0.42; g.fillStyle=col.gfill; rr(g,-h,-h,s0,s0,rad); g.fill();
+      g.globalAlpha=0.9; g.strokeStyle=col.gedge; g.lineWidth=Math.max(1.5,cell*0.05);
       rr(g,-h,-h,s0,s0,rad); g.stroke(); g.restore(); return; }
     const a=(opt.alpha!=null)?opt.alpha:1;
     let grad;
@@ -144,13 +144,10 @@ export function createView({ cv, ctx, nextCv, nctx, isMobile, audio, dom }){
     else { grad=g.createLinearGradient(0,-h,0,h);
       grad.addColorStop(0,col.top); grad.addColorStop(.52,col.fill); grad.addColorStop(1,col.dark); }
     g.globalAlpha=a; g.fillStyle=grad; rr(g,-h,-h,s0,s0,rad); g.fill();
-    // 顶部玻璃光泽:更白更收拢(用缓存的白色渐变),清爽有光不发糊
+    // 顶部柔和光泽(护眼:低亮度白、更收拢;去掉了原来的高亮内边)
     g.globalAlpha=a; g.fillStyle=(g===ctx && cell===CELL && glossGrad) ? glossGrad : col.glow;
-    rr(g, -h+s0*0.09, -h+s0*0.07, s0*0.82, s0*0.30, rad*0.66); g.fill();
-    // 内圈亮边(左上受光)→ 糖果/宝石立体感
-    g.globalAlpha=a*0.55; g.strokeStyle=col.glow; g.lineWidth=Math.max(1,cell*0.035);
-    rr(g, -h+cell*0.05, -h+cell*0.05, s0-cell*0.10, s0-cell*0.10, rad*0.75); g.stroke();
-    // 外圈深色描边:加粗,把相邻方块清晰分开(消除「糊成一片」)
+    rr(g, -h+s0*0.11, -h+s0*0.09, s0*0.78, s0*0.24, rad*0.6); g.fill();
+    // 外圈深色描边:分隔相邻方块(暗色,不增加亮度)
     g.globalAlpha=a; g.strokeStyle=col.edge; g.lineWidth=Math.max(1.4,cell*0.06);
     rr(g,-h,-h,s0,s0,rad); g.stroke();
     if(opt.junk){
@@ -160,7 +157,7 @@ export function createView({ cv, ctx, nextCv, nctx, isMobile, audio, dom }){
     }
     if(opt.active){
       const pv=g.globalCompositeOperation; g.globalCompositeOperation="lighter";
-      g.globalAlpha=0.55; g.strokeStyle=col.glow; g.lineWidth=Math.max(1.5,cell*0.06);
+      g.globalAlpha=0.4; g.strokeStyle=col.glow; g.lineWidth=Math.max(1.5,cell*0.06);   // 护眼:降低当前块辉光
       rr(g,-h,-h,s0,s0,rad); g.stroke(); g.globalCompositeOperation=pv;
     }
     g.restore();
