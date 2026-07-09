@@ -53,8 +53,8 @@ import { createUI } from "./ui.js";
     view.hud.syncCoins(); view.hud.renderItemBar();
     ensureAudio(); startMusic(); beep(660,.08,"sine",.1);
   }
-  function doRevive(){
-    model.revive();
+  function doRevive(rows){
+    model.revive(rows);   // 普通复活 6 行;看广告复活传 12
     overlay.classList.add("hidden");
     model.spawn();
     if(model.state==="playing"){ last=performance.now(); startMusic(); }
@@ -171,6 +171,7 @@ import { createUI } from "./ui.js";
         pieceUntilJunk:model.pieceUntilJunk, junkMin:model.junkMin, junkMax:model.junkMax, sub:model.sub, state:model.state, diffKey:model.diffKey,
         stage:model.level, goal:stageGoal(model.level), prog:model.cleared-model.stageStart, cleared:model.cleared }),
       forceJunk:()=>model.dropJunk(),
+      junk:()=>model.fallingJunk.map(g=>({c:g.c,y:Math.round(g.y*100)/100,off:g.cells.map(cl=>cl.dc+","+cl.dr)})),
       falling:()=>model.fallingJunk.map(j=>({c:j.c,y:Math.round(j.y*100)/100})),
       tick:(ms)=>model.updateAnim(ms||16),
       coins:()=>getCoins(), give:(n)=>{ addCoins(n||5); view.hud.syncCoins(); return getCoins(); },

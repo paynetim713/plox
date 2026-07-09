@@ -14,7 +14,7 @@ export function createView({ cv, ctx, nextCv, nctx, isMobile, audio, dom }){
   let CELL=44, dpr=1;
   const particles=[], popups=[];
   let banner=null, shakeT=0, freezeT=0, ghostOn=true;
-  let gradCache=[], bgGrad=null;
+  let gradCache=[], bgGrad=null, glossGrad=null;
 
   // ---------- HUD ----------
   function syncCoins(){ if(elCoinNum) elCoinNum.textContent=getCoins(); }
@@ -66,8 +66,8 @@ export function createView({ cv, ctx, nextCv, nctx, isMobile, audio, dom }){
       availH = window.innerHeight*0.62;
     }
     CELL = Math.max(20, Math.floor(Math.min(availW/COLS, availH/ROWS)));
-    dpr = Math.min(window.devicePixelRatio||1, 2);
-    cv.width=COLS*CELL*dpr; cv.height=ROWS*CELL*dpr;
+    dpr = Math.min(window.devicePixelRatio||1, 3);   // 从 2 提到 3:高分屏(3x 手机)方块不再被降采样糊掉
+    cv.width=Math.round(COLS*CELL*dpr); cv.height=Math.round(ROWS*CELL*dpr);   // 取整,避免小数背景缓冲导致的模糊
     cv.style.width=COLS*CELL+"px"; cv.style.height=ROWS*CELL+"px";
     ctx.setTransform(dpr,0,0,dpr,0,0);
     rebuildGradients();
@@ -77,6 +77,9 @@ export function createView({ cv, ctx, nextCv, nctx, isMobile, audio, dom }){
     const p0=Math.max(2,CELL*0.06), H0=(CELL-p0*2)/2;
     gradCache=COLORS.map(col=>{ const gr=ctx.createLinearGradient(0,-H0,0,H0);
       gr.addColorStop(0,col.top); gr.addColorStop(.52,col.fill); gr.addColorStop(1,col.dark); return gr; });
+    // 顶部玻璃高光(白→透明),按 CELL 缓存一次、所有方块复用,不每帧重建(省性能)
+    glossGrad=ctx.createLinearGradient(0,-H0,0,-H0+H0*0.9);
+    glossGrad.addColorStop(0,"rgba(255,255,255,0.52)"); glossGrad.addColorStop(1,"rgba(255,255,255,0)");
     bgGrad=ctx.createLinearGradient(0,0,0,ROWS*CELL);
     bgGrad.addColorStop(0,"#120428"); bgGrad.addColorStop(1,"#070114");
   }
@@ -141,9 +144,14 @@ export function createView({ cv, ctx, nextCv, nctx, isMobile, audio, dom }){
     else { grad=g.createLinearGradient(0,-h,0,h);
       grad.addColorStop(0,col.top); grad.addColorStop(.52,col.fill); grad.addColorStop(1,col.dark); }
     g.globalAlpha=a; g.fillStyle=grad; rr(g,-h,-h,s0,s0,rad); g.fill();
-    g.globalAlpha=a*0.5; g.fillStyle=col.glow;
-    rr(g, -h+s0*0.13, -h+s0*0.09, s0*0.74, s0*0.2, rad*0.6); g.fill();
-    g.globalAlpha=a; g.strokeStyle=col.edge; g.lineWidth=Math.max(1,cell*0.035);
+    // 顶部玻璃光泽:更白更收拢(用缓存的白色渐变),清爽有光不发糊
+    g.globalAlpha=a; g.fillStyle=(g===ctx && cell===CELL && glossGrad) ? glossGrad : col.glow;
+    rr(g, -h+s0*0.09, -h+s0*0.07, s0*0.82, s0*0.30, rad*0.66); g.fill();
+    // 内圈亮边(左上受光)→ 糖果/宝石立体感
+    g.globalAlpha=a*0.55; g.strokeStyle=col.glow; g.lineWidth=Math.max(1,cell*0.035);
+    rr(g, -h+cell*0.05, -h+cell*0.05, s0-cell*0.10, s0-cell*0.10, rad*0.75); g.stroke();
+    // 外圈深色描边:加粗,把相邻方块清晰分开(消除「糊成一片」)
+    g.globalAlpha=a; g.strokeStyle=col.edge; g.lineWidth=Math.max(1.4,cell*0.06);
     rr(g,-h,-h,s0,s0,rad); g.stroke();
     if(opt.junk){
       g.globalAlpha=a*0.34; g.fillStyle="#2a0606"; rr(g,-h,-h,s0,s0,rad); g.fill();
@@ -200,7 +208,7 @@ export function createView({ cv, ctx, nextCv, nctx, isMobile, audio, dom }){
       ctx.fillRect(x+2, 0, CELL-4, Math.max(3,CELL*0.09));
       ctx.beginPath(); ctx.moveTo(x+CELL*0.36,CELL*0.16); ctx.lineTo(x+CELL*0.64,CELL*0.16); ctx.lineTo(x+CELL*0.5,CELL*0.30); ctx.closePath(); ctx.fill();
       ctx.restore(); }
-    for(const j of fallingJunk){ if(j.y>-1) drawBlock(ctx, j.c, j.y, j.idx, {junk:true}); }
+    for(const g of fallingJunk){ for(const cell of g.cells){ const ry=g.y+cell.dr; if(ry>-1) drawBlock(ctx, g.c+cell.dc, ry, cell.idx, {junk:true}); } }
 
     if(state==="playing"&&current&&sub==="control"){
       const n=current.colors.length;
@@ -278,7 +286,7 @@ export function createView({ cv, ctx, nextCv, nctx, isMobile, audio, dom }){
     const next=model.next;
     const n=next.colors.length, cs=Math.round(CELL*0.62);
     nextCv.style.width=cs+"px"; nextCv.style.height=(cs*n)+"px";
-    nextCv.width=cs*dpr; nextCv.height=cs*n*dpr;
+    nextCv.width=Math.round(cs*dpr); nextCv.height=Math.round(cs*n*dpr);
     nctx.setTransform(dpr,0,0,dpr,0,0);
     nctx.clearRect(0,0,cs,cs*n);
     for(let i=0;i<n;i++) drawBlock(nctx,0,i,next.colors[i],{glow:1},cs);

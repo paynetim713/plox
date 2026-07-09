@@ -4,7 +4,7 @@
 import { DIFFS } from "./config.js";
 import { getCoins, addCoins, spendCoins, getDiamonds, addDiamonds, spendDiamonds, DIAMOND_TO_COIN } from "./economy.js";
 import { ITEMS, ITEM_LIST, getItem, addItem } from "./items.js";
-import { purchase } from "./platform.js";
+import { purchase, showRewardedAd } from "./platform.js";
 
 export function createUI({ overlay, $, model, view, audio, lb, ctrl, isMobile }){
   const { beep }=audio;
@@ -222,14 +222,16 @@ export function createUI({ overlay, $, model, view, audio, lb, ctrl, isMobile })
       '<div class="ovr">'+
         '<h1 class="ovTitle warn">差一点!</h1>'+
         '<div class="ovScore">本局 <b>'+nfmt(model.score)+'</b></div>'+
-        '<div class="ovHint">复活后炸掉最下方 <b>6 行</b>,继续冲分</div>'+
+        '<div class="ovHint">看广告清 <b>12 行</b> · 金币清 <b>6 行</b>,继续冲分</div>'+
         '<div class="reviveBtns">'+
+          '<button class="play reviveBtn radAd" id="reviveAd"><span>📺 看广告复活 · 清下方 12 行(免费)</span></button>'+
           '<button class="play reviveBtn rcoin'+(afford?'':' off')+'" id="reviveCoin"><i class="coin"></i><span>金币复活 · '+cost+'</span></button>'+
           (afford?'':'<button class="actBtn2 wide" id="reviveRecharge">金币不够,去充值</button>')+
         '</div>'+
         '<div class="link" id="giveUp">放弃,看结算</div>'+
       '</div>';
     overlay.classList.remove("hidden");
+    $("reviveAd").addEventListener("click",()=>{ showRewardedAd(()=>ctrl.doRevive(12), ()=>{}); });
     $("reviveCoin").addEventListener("click",()=>{ if(getCoins()>=cost && spendCoins(cost)){ view.hud.syncCoins(); ctrl.doRevive(); } });
     if($("reviveRecharge")) $("reviveRecharge").addEventListener("click", ()=>showRecharge("revive"));
     $("giveUp").addEventListener("click", showSettle);

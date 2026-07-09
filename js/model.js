@@ -147,21 +147,32 @@ export function createModel(deps){
     sub="control"; spawn();
   }
   function colFill(c){ let top=0; while(top<ROWS && board[top][c]==null) top++; return ROWS-top; }
+  // 乱入块随机形状:横1 / 横2 / 竖1 / 竖2(横1≡竖1=单格)。整体缓降、逐格落地、不可操作
   function dropJunk(){
-    const n=Math.random()<0.6?1:2;
-    let cols=[]; for(let c=0;c<COLS;c++){ const f=colFill(c); if(f<ROWS-1){ const e=ROWS-f; cols.push({c,w:e*e}); } }
-    if(!cols.length) cols=[{c:(Math.random()*COLS)|0,w:1}];
-    let added=0;
-    for(let i=0;i<n && cols.length;i++){
-      let tot=cols.reduce((a,b)=>a+b.w,0), r=Math.random()*tot, pick=0;
-      for(let k=0;k<cols.length;k++){ r-=cols[k].w; if(r<=0){ pick=k; break; } }
-      const c=cols.splice(pick,1)[0].c;
-      fallingJunk.push({c, y:-1.6, idx:rc()});
-      junkWarn.push({c, t:0});
-      added++;
+    const orient = Math.random()<0.5 ? "h" : "v";
+    const len = Math.random()<0.5 ? 1 : 2;
+    const cells=[];
+    for(let i=0;i<len;i++) cells.push({ dc: orient==="h"?i:0, dr: orient==="h"?0:i, idx: rc() });
+    const wide = orient==="h" ? len : 1;          // 占用列数
+    const needPerCol = orient==="h" ? 1 : len;    // 每列需要的空行数
+    let cands=[];
+    for(let c=0; c+wide-1<COLS; c++){
+      let ok=true, emptiness=0;
+      for(let k=0;k<wide;k++){ const free=ROWS-colFill(c+k); if(free<needPerCol){ ok=false; break; } emptiness+=free; }
+      if(ok) cands.push({c, w:emptiness*emptiness});
     }
-    if(added) beep(115,.09,"sine",.05);
-    return {added};
+    if(!cands.length){   // 没有理想落点:退化成单格随便找一列
+      const c=(Math.random()*COLS)|0;
+      fallingJunk.push({c, y:-1.6, cells:[{dc:0,dr:0,idx:rc()}]}); junkWarn.push({c, t:0});
+      beep(115,.09,"sine",.05); return {added:1};
+    }
+    let tot=cands.reduce((a,b)=>a+b.w,0), r=Math.random()*tot, pick=0;
+    for(let k=0;k<cands.length;k++){ r-=cands[k].w; if(r<=0){ pick=k; break; } }
+    const c=cands[pick].c;
+    fallingJunk.push({c, y:-1.6, cells});
+    for(let k=0;k<wide;k++) junkWarn.push({c:c+k, t:0});
+    beep(115,.09,"sine",.05);
+    return {added:len};
   }
   function resolveJunk(){
     let total=0;
@@ -208,10 +219,11 @@ export function createModel(deps){
     recordBestStage(level);
     on.gameOver();
   }
-  // 复活:炸掉最下方 6 行(不含 overlay/spawn/音乐,那些由 Controller 接管以保持原顺序)
-  function revive(){
+  // 复活:炸掉最下方 rows 行(普通=6;看广告=12,2×)。不含 overlay/spawn/音乐,那些由 Controller 接管以保持原顺序
+  function revive(rows){
+    rows = rows || 6;
     revives++;
-    for(let r=ROWS-1;r>=Math.max(0,ROWS-6);r--) for(let c=0;c<COLS;c++){
+    for(let r=ROWS-1;r>=Math.max(0,ROWS-rows);r--) for(let c=0;c<COLS;c++){
       if(board[r][c]!=null){ fx.spawnParticles(c,r,board[r][c],7); board[r][c]=null; voff[r][c]=0; vmode[r][c]=0; vscale[r][c]=1; } }
     fallingJunk.length=0; junkWarn.length=0; clearing=null;
     gravity();
@@ -230,7 +242,7 @@ export function createModel(deps){
     const k=dt/16.7;
     if(rotT>0) rotT=Math.max(0,rotT-dt);
     for(let i=junkWarn.length-1;i>=0;i--){ junkWarn[i].t+=dt;
-      if(junkWarn[i].t>=600 && !fallingJunk.some(j=>j.c===junkWarn[i].c)) junkWarn.splice(i,1); }
+      if(junkWarn[i].t>=600 && !fallingJunk.some(g=>g.cells.some(cell=>g.c+cell.dc===junkWarn[i].c))) junkWarn.splice(i,1); }
     for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
       if(voff[r][c]!==0){
         if(vmode[r][c]===1){ voff[r][c]+=JUNK_FALL*dt; if(voff[r][c]>=0){ voff[r][c]=0; vmode[r][c]=0; } }
@@ -239,21 +251,26 @@ export function createModel(deps){
       if(vscale[r][c]!==1){ vscale[r][c]+=(1-vscale[r][c])*Math.min(1,0.22*k); if(Math.abs(vscale[r][c]-1)<0.01) vscale[r][c]=1; }
     }
     if(state==="playing" && sub==="control"){
+      let landedAny=false;
       for(let i=fallingJunk.length-1;i>=0;i--){
-        const j=fallingJunk[i];
-        j.y += JUNK_FALL*dt;
-        let top=0; while(top<ROWS && board[top][j.c]==null) top++;
-        const R=top-1;
-        if(R<0){ fallingJunk.splice(i,1); continue; }
-        if(j.y>=R){
-          board[R][j.c]=j.idx; vscale[R][j.c]=1.35; voff[R][j.c]=0; vmode[R][j.c]=0;
-          fallingJunk.splice(i,1);
-          fx.spawnParticles(j.c, R, j.idx);
-          beep(95,.12,"sine",.08); beep(150,.06,"triangle",.05);
-          fx.shakeMax(70);
-          resolveJunk();
+        const g=fallingJunk[i];
+        g.y += JUNK_FALL*dt;
+        // 组内每格独立结算:落到各自列顶就位(横2 遇不平地会分开落、不悬空;竖2 底格先落)
+        for(let k=g.cells.length-1;k>=0;k--){
+          const cell=g.cells[k], col=g.c+cell.dc;
+          let top=0; while(top<ROWS && board[top][col]==null) top++;
+          const anchorLand=top-1-cell.dr;      // 该格落地时对应的锚点行
+          if(anchorLand<0){ g.cells.splice(k,1); continue; }   // 该列满,这格放不下→丢弃
+          if(g.y>=anchorLand){
+            const R=anchorLand+cell.dr;
+            board[R][col]=cell.idx; vscale[R][col]=1.35; voff[R][col]=0; vmode[R][col]=0;
+            fx.spawnParticles(col, R, cell.idx);
+            g.cells.splice(k,1); landedAny=true;
+          }
         }
+        if(!g.cells.length) fallingJunk.splice(i,1);
       }
+      if(landedAny){ beep(95,.12,"sine",.08); beep(150,.06,"triangle",.05); fx.shakeMax(70); resolveJunk(); }
     }
     if(state==="playing" && current && sub==="control"){
       const iv = softDrop ? Math.min(55,dropInterval) : dropInterval;
