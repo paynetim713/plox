@@ -277,6 +277,7 @@ export function createUI({ overlay, $, model, view, audio, lb, ctrl, isMobile })
   const reviveCost=()=>5+model.revives*5;   // 5 / 10 / 15 金币
   function showReviveOffer(){
     if(model.revives>=MAX_REVIVES){ showSettle(); return; }
+    model.setState("revive");   // 专用态:挡住键盘空格/回车在复活页误开新局
     const cost=reviveCost(), afford=getCoins()>=cost;
     overlay.innerHTML=
       '<div class="ovr">'+
@@ -299,7 +300,7 @@ export function createUI({ overlay, $, model, view, audio, lb, ctrl, isMobile })
 
   // ---------- 闯关失败(重试本关)----------
   function showLevelFail(){
-    model.setState("gameover"); overlay.classList.remove("hidden"); view.hud.syncCoins();
+    model.setState("levelfail"); overlay.classList.remove("hidden"); view.hud.syncCoins();   // 专用态:挡住键盘误开局
     overlay.innerHTML=
       '<div class="ovr">'+
         '<h1 class="ovTitle warn">第 '+model.level+' 关 失败</h1>'+

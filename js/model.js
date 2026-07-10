@@ -26,8 +26,10 @@ export function createModel(deps){
   function getBest(d){ try{ return +((JSON.parse(localStorage.getItem("plox_best"))||{})[d]||0); }catch(e){ return 0; } }
   function setBest(d,s){ try{ const b=JSON.parse(localStorage.getItem("plox_best"))||{}; b[d]=s; localStorage.setItem("plox_best",JSON.stringify(b)); }catch(e){} }
   function refreshHigh(){ high=getBest(diffKey); ui.setHigh(high); }
-  function getBestStage(d){ try{ return +((JSON.parse(localStorage.getItem("plox_beststage"))||{})[d]||0); }catch(e){ return 0; } }
-  function recordBestStage(s){ try{ const b=JSON.parse(localStorage.getItem("plox_beststage"))||{}; if(s>(b[diffKey]||0)){ b[diffKey]=s; localStorage.setItem("plox_beststage",JSON.stringify(b)); } }catch(e){} }
+  // 最高关卡/速度按模式分键存:无尽=plox_bestspeed(速度档),闯关=plox_beststage(关卡数),互不污染
+  const stageKey=()=> mode==="endless" ? "plox_bestspeed" : "plox_beststage";
+  function getBestStage(d){ try{ return +((JSON.parse(localStorage.getItem(stageKey()))||{})[d]||0); }catch(e){ return 0; } }
+  function recordBestStage(s){ try{ const k=stageKey(), b=JSON.parse(localStorage.getItem(k))||{}; if(s>(b[diffKey]||0)){ b[diffKey]=s; localStorage.setItem(k,JSON.stringify(b)); } }catch(e){} }
   // 闯关解锁进度:独立键、按难度分、仅闯关写入(避免刷无尽把闯关关卡一起解锁)
   function getCampaignMax(d){ try{ return +((JSON.parse(localStorage.getItem("plox_campaign"))||{})[d]||0); }catch(e){ return 0; } }
   function recordCampaignMax(s){ try{ const b=JSON.parse(localStorage.getItem("plox_campaign"))||{}; if(s>(b[diffKey]||0)){ b[diffKey]=s; localStorage.setItem("plox_campaign",JSON.stringify(b)); } }catch(e){} }
@@ -204,6 +206,8 @@ export function createModel(deps){
     }
     if(total){ score+=total*10; cleared+=total; checkStageUp(); ui.syncHUD();
       fx.shake(Math.min(180,60+total*16)); beep(520,.1,"triangle",.1); }
+    // 闯关靠乱入/炸弹过关时,在此立即清盘(否则要等下一枚方块 settle 才清,还会吞掉它)。玩家方块路径仍走 settle
+    if(pendingLevelClear){ pendingLevelClear=false; clearBoardForNextLevel(); }
   }
   // 道具:炸弹(炸掉最下方 N 行);炸掉的方块计入闯关进度
   function useBomb(id){
