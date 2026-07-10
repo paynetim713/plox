@@ -15,6 +15,7 @@ export function createView({ cv, ctx, nextCv, nctx, isMobile, audio, dom }){
   const particles=[], popups=[]; const MAX_PARTICLES=240;   // 全局粒子上限:大消除/连锁不再无界灌爆(消卡顿头号)
   let banner=null, shakeT=0, freezeT=0, ghostOn=true;
   let gradCache=[], bgGrad=null, glossGrad=null;
+  let bgCanvas=null, blockSprites=[];   // 深度优化:背景+网格 & 静止方块预渲染到离屏,render 每帧只 drawImage
 
   // ---------- HUD ----------
   function syncCoins(){ if(elCoinNum) elCoinNum.textContent=getCoins(); }
@@ -67,7 +68,7 @@ export function createView({ cv, ctx, nextCv, nctx, isMobile, audio, dom }){
       availH = window.innerHeight*0.62;
     }
     CELL = Math.max(20, Math.floor(Math.min(availW/COLS, availH/ROWS)));
-    dpr = Math.min(window.devicePixelRatio||1, 3);   // 从 2 提到 3:高分屏(3x 手机)方块不再被降采样糊掉
+    dpr = Math.min(window.devicePixelRatio||1, isMobile?2:3);   // 深度优化:移动端封 2(后备缓冲面积减半、填充成本大降),桌面留 3
     cv.width=Math.round(COLS*CELL*dpr); cv.height=Math.round(ROWS*CELL*dpr);   // 取整,避免小数背景缓冲导致的模糊
     cv.style.width=COLS*CELL+"px"; cv.style.height=ROWS*CELL+"px";
     ctx.setTransform(dpr,0,0,dpr,0,0);
@@ -83,6 +84,21 @@ export function createView({ cv, ctx, nextCv, nctx, isMobile, audio, dom }){
     glossGrad.addColorStop(0,"rgba(255,255,255,0.16)"); glossGrad.addColorStop(1,"rgba(255,255,255,0)");   // 护眼:柔和低亮高光(远低于原 0.52)
     bgGrad=ctx.createLinearGradient(0,0,0,ROWS*CELL);
     bgGrad.addColorStop(0,"#120428"); bgGrad.addColorStop(1,"#070114");
+    // 离屏背景+网格(整局不变):render 每帧只 drawImage 一次,替代 fillRect + 23 条网格 stroke
+    const bw2=COLS*CELL+18, bh2=ROWS*CELL+18;
+    bgCanvas=document.createElement("canvas");
+    bgCanvas.width=Math.round(bw2*dpr); bgCanvas.height=Math.round(bh2*dpr);
+    const bx=bgCanvas.getContext("2d"); bx.setTransform(dpr,0,0,dpr,0,0);
+    const bg=bx.createLinearGradient(0,9,0,9+ROWS*CELL); bg.addColorStop(0,"#120428"); bg.addColorStop(1,"#070114");
+    bx.fillStyle=bg; bx.fillRect(0,0,bw2,bh2);
+    bx.strokeStyle="rgba(150,90,255,.10)"; bx.lineWidth=1;
+    for(let c=0;c<=COLS;c++){ bx.beginPath(); bx.moveTo(9+c*CELL,9); bx.lineTo(9+c*CELL,9+ROWS*CELL); bx.stroke(); }
+    for(let r=0;r<=ROWS;r++){ bx.beginPath(); bx.moveTo(9,9+r*CELL); bx.lineTo(9+COLS*CELL,9+r*CELL); bx.stroke(); }
+    // 静止标准方块预渲染成 sprite(含 dpr):render 静止块用 drawImage 替代逐帧建 3 条 rr 路径+fill+gloss+stroke
+    blockSprites=COLORS.map((col,idx)=>{ const sc=document.createElement("canvas");
+      sc.width=Math.round(CELL*dpr); sc.height=Math.round(CELL*dpr);
+      const sx=sc.getContext("2d"); sx.setTransform(dpr,0,0,dpr,0,0);
+      drawBlock(sx, 0, 0, idx, {}, CELL); return sc; });
   }
 
   // ---------- 特效 spawn ----------
@@ -146,8 +162,11 @@ export function createView({ cv, ctx, nextCv, nctx, isMobile, audio, dom }){
     else { grad=g.createLinearGradient(0,-h,0,h);
       grad.addColorStop(0,col.top); grad.addColorStop(.52,col.fill); grad.addColorStop(1,col.dark); }
     g.globalAlpha=a; g.fillStyle=grad; rr(g,-h,-h,s0,s0,rad); g.fill();
-    // 顶部柔和光泽(护眼:低亮度白、更收拢;去掉了原来的高亮内边)
-    g.globalAlpha=a; g.fillStyle=(g===ctx && cell===CELL && glossGrad) ? glossGrad : col.glow;
+    // 顶部柔和光泽(护眼:低亮度白、更收拢);非缓存上下文(sprite/预览)也用同款白渐变,保证 sprite 与实时块一致
+    let gloss;
+    if(g===ctx && cell===CELL && glossGrad){ gloss=glossGrad; }
+    else { gloss=g.createLinearGradient(0,-h,0,-h+h*0.9); gloss.addColorStop(0,"rgba(255,255,255,0.16)"); gloss.addColorStop(1,"rgba(255,255,255,0)"); }
+    g.globalAlpha=a; g.fillStyle=gloss;
     rr(g, -h+s0*0.11, -h+s0*0.09, s0*0.78, s0*0.24, rad*0.6); g.fill();
     // 外圈深色描边:分隔相邻方块(暗色,不增加亮度)
     g.globalAlpha=a; g.strokeStyle=col.edge; g.lineWidth=Math.max(1.4,cell*0.06);
@@ -174,18 +193,20 @@ export function createView({ cv, ctx, nextCv, nctx, isMobile, audio, dom }){
     let ox=0,oy=0;
     if(shakeT>0){ const m=Math.min(8, shakeT/22); ox=(Math.random()*2-1)*m; oy=(Math.random()*2-1)*m; }
     ctx.save(); ctx.clearRect(0,0,cv.width,cv.height); ctx.translate(ox,oy);
-    ctx.fillStyle=bgGrad||"#0a0118"; ctx.fillRect(-9,-9,COLS*CELL+18,ROWS*CELL+18);
-    ctx.strokeStyle="rgba(150,90,255,.10)"; ctx.lineWidth=1;
-    for(let c=0;c<=COLS;c++){ ctx.beginPath(); ctx.moveTo(c*CELL,0); ctx.lineTo(c*CELL,ROWS*CELL); ctx.stroke(); }
-    for(let r=0;r<=ROWS;r++){ ctx.beginPath(); ctx.moveTo(0,r*CELL); ctx.lineTo(COLS*CELL,r*CELL); ctx.stroke(); }
+    if(bgCanvas) ctx.drawImage(bgCanvas, -9, -9, COLS*CELL+18, ROWS*CELL+18);   // 背景+网格离屏:每帧一次 drawImage,替代 fillRect + 23 条 stroke
+    else { ctx.fillStyle=bgGrad||"#0a0118"; ctx.fillRect(-9,-9,COLS*CELL+18,ROWS*CELL+18); }
 
     for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) if(board[r][c]!=null){
-      const key=r+","+c, ry=r+voff[r][c];
-      if(clearing&&clearing.has(key)){
+      const ry=r+voff[r][c];
+      let inClear=false;
+      if(clearing){ if(clearing.has(r+","+c)) inClear=true; }   // key 只在有 clearing 时拼(省逐帧字符串 GC)
+      if(inClear){
         const t=Math.max(0,Math.min(1,1-clearTimer/CLEAR_MS));
         drawBlock(ctx,c,ry,board[r][c],{glow:1.6, alpha:1-t*0.7, scale:1+0.16*Math.sin(t*Math.PI)});
         ctx.save(); ctx.globalAlpha=(1-t)*0.5; ctx.fillStyle="#fff";
         const p=Math.max(2,CELL*0.07); rr(ctx,c*CELL+p,ry*CELL+p,CELL-p*2,CELL-p*2,CELL*0.18); ctx.fill(); ctx.restore();
+      } else if(vscale[r][c]===1 && blockSprites[board[r][c]]){
+        ctx.drawImage(blockSprites[board[r][c]], c*CELL, ry*CELL, CELL, CELL);   // 静止块:sprite,免逐帧建 3 条路径+fill+gloss+stroke
       } else drawBlock(ctx,c,ry,board[r][c],{scale:vscale[r][c]});
     }
 
