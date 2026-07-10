@@ -48,8 +48,10 @@ import { createUI } from "./ui.js";
 
   // ---------- 流程 ----------
   let last=0, _lastState="";
-  function start(){
-    model.reset(); model.setState("playing"); overlay.classList.add("hidden"); last=performance.now();
+  function start(startLevel){
+    // typeof 守卫:playBtn/againBtn 用 addEventListener("click",ctrl.start) 会把 Event 当参数传进来
+    const lvl=(typeof startLevel==="number"&&startLevel>0)?startLevel:1;
+    model.reset(lvl); model.setState("playing"); overlay.classList.add("hidden"); last=performance.now();
     view.hud.syncCoins(); view.hud.renderItemBar();
     ensureAudio(); startMusic(); beep(660,.08,"sine",.1);
   }
@@ -103,7 +105,7 @@ import { createUI } from "./ui.js";
   document.addEventListener("keydown",e=>{
     if(e.target && (e.target.tagName==="INPUT"||e.target.isContentEditable)) return;
     if(["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"," "].includes(e.key)) e.preventDefault();
-    if(model.state!=="playing"){ if((e.key===" "||e.key==="Enter")&&(model.state==="gameover"||model.state==="start")) start(); return; }
+    if(model.state!=="playing"){ if((e.key===" "||e.key==="Enter")&&model.state==="gameover") start(model.mode==="campaign"?model.level:undefined); return; }
     switch(e.key){
       case "ArrowLeft": model.move(-1); break;
       case "ArrowRight": model.move(1); break;

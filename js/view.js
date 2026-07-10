@@ -12,13 +12,14 @@ export function createView({ cv, ctx, nextCv, nctx, isMobile, audio, dom }){
 
   let model=null;                       // bind() 后填入
   let CELL=44, dpr=1;
-  const particles=[], popups=[];
+  const particles=[], popups=[]; const MAX_PARTICLES=240;   // 全局粒子上限:大消除/连锁不再无界灌爆(消卡顿头号)
   let banner=null, shakeT=0, freezeT=0, ghostOn=true;
   let gradCache=[], bgGrad=null, glossGrad=null;
 
   // ---------- HUD ----------
   function syncCoins(){ if(elCoinNum) elCoinNum.textContent=getCoins(); }
-  function syncHUD(){ elScore.textContent=model.score; elLevel.textContent=model.level; elCleared.textContent=model.cleared; elMaxCombo.textContent="×"+model.maxCombo; }
+  function syncHUD(){ elScore.textContent=model.score; elLevel.textContent=model.level; elCleared.textContent=model.cleared; elMaxCombo.textContent="×"+model.maxCombo;
+    const ll=document.getElementById("levelLabel"); if(ll) ll.textContent = model.mode==="endless" ? "速度" : "关卡"; }   // 无尽不显示「关卡」感,改「速度」
   function bombSvg(rows, tone){
     const big = tone==="hot";
     let bars=""; const n=rows, bw= big?18:15, x=(24-bw)/2, gap=2.5, h=1.9, y0=23-n*gap;
@@ -89,6 +90,7 @@ export function createView({ cv, ctx, nextCv, nctx, isMobile, audio, dom }){
     const col=COLORS[idx]||COLORS[0];
     const cx=(c+0.5)*CELL, cy=(r+0.5)*CELL; n=n||11;
     for(let i=0;i<n;i++){
+      if(particles.length>=MAX_PARTICLES) break;   // 超上限停止喷发
       const a=Math.random()*Math.PI*2, sp=CELL*(0.05+Math.random()*0.17), spark=i%4===0;
       particles.push({x:cx,y:cy,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-CELL*0.03,
         life:1, decay:0.022+Math.random()*0.012,
@@ -114,7 +116,7 @@ export function createView({ cv, ctx, nextCv, nctx, isMobile, audio, dom }){
     const k=dt/16.7;
     for(let i=particles.length-1;i>=0;i--){ const p=particles[i];
       p.x+=p.vx*k; p.y+=p.vy*k; p.vy+=CELL*0.016*k; p.life-=(p.decay||0.03)*k;
-      if(p.life<=0) particles.splice(i,1); }
+      if(p.life<=0){ particles[i]=particles[particles.length-1]; particles.pop(); } }   // swap-remove:免 splice 每帧位移与 GC
     for(let i=popups.length-1;i>=0;i--){ const q=popups[i];
       q.age+=dt; q.life-=0.018*k; if(q.life<0.55) q.y-=CELL*0.04*k;
       if(q.life<=0) popups.splice(i,1); }
@@ -249,9 +251,10 @@ export function createView({ cv, ctx, nextCv, nctx, isMobile, audio, dom }){
       ctx.save(); ctx.globalAlpha=Math.max(0,fade); ctx.textAlign="center"; ctx.textBaseline="middle";
       ctx.translate(COLS*CELL/2, ROWS*CELL*0.20); ctx.scale(sc,sc);
       const fs=Math.round(CELL*1.0);
+      const bTxt = model.mode==="endless" ? "速度 "+banner.stage : "第 "+banner.stage+" 关";
       ctx.font="900 "+fs+"px system-ui,sans-serif";
-      ctx.lineWidth=Math.max(4,CELL*0.13); ctx.strokeStyle="rgba(8,2,20,.95)"; ctx.strokeText("第 "+banner.stage+" 关",0,0);
-      ctx.fillStyle="#ffd86a"; ctx.fillText("第 "+banner.stage+" 关",0,0);
+      ctx.lineWidth=Math.max(4,CELL*0.13); ctx.strokeStyle="rgba(8,2,20,.95)"; ctx.strokeText(bTxt,0,0);
+      ctx.fillStyle="#ffd86a"; ctx.fillText(bTxt,0,0);
       if(banner.reward){ const subFs=Math.round(CELL*0.46), subY=fs*0.76, txt="+"+banner.reward;
         ctx.font="800 "+subFs+"px system-ui,sans-serif";
         const tw=ctx.measureText(txt).width, r=subFs*0.5, gap=subFs*0.26, cx=-(r*2+gap+tw)/2+r;
@@ -271,8 +274,9 @@ export function createView({ cv, ctx, nextCv, nctx, isMobile, audio, dom }){
       ctx.fillStyle="rgba(255,255,255,.10)"; ctx.fillRect(0,0,bw,bh);
       ctx.fillStyle="#ffd86a"; ctx.fillRect(0,0,bw*prog,bh);
       ctx.save(); ctx.textAlign="left"; ctx.textBaseline="top"; ctx.font="700 "+Math.max(9,Math.round(CELL*0.26))+"px system-ui,sans-serif";
-      ctx.fillStyle="rgba(8,2,20,.55)"; ctx.fillText("关卡 "+level+" · "+have+"/"+need, 5, bh+4);
-      ctx.fillStyle="#d9c8ff"; ctx.fillText("关卡 "+level+" · "+have+"/"+need, 4, bh+3); ctx.restore();
+      const pfx = model.mode==="endless" ? "速度 " : "关卡 ";
+      ctx.fillStyle="rgba(8,2,20,.55)"; ctx.fillText(pfx+level+" · "+have+"/"+need, 5, bh+4);
+      ctx.fillStyle="#d9c8ff"; ctx.fillText(pfx+level+" · "+have+"/"+need, 4, bh+3); ctx.restore();
     }
 
     ctx.restore();

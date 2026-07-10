@@ -34,20 +34,15 @@ export function createUI({ overlay, $, model, view, audio, lb, ctrl, isMobile })
       '<div class="dcBars">'+bars+'</div>'+
       '<div class="dcBest">最高 '+nfmt(model.getBest(k))+'</div></button>';
   }
+  // 主菜单:只做导航入口(难度/模式下沉到子页)
   function showMenu(){
     model.setState("start"); model.refreshHigh();
-    const modeTab=(m,label,desc)=>{ const on=model.mode===m;
-      return '<button class="modeTab" data-mode="'+m+'" style="flex:1;max-width:150px;padding:8px 0;border-radius:12px;cursor:pointer;border:1.5px solid '+(on?'#ffd86a':'rgba(255,255,255,.14)')+';background:'+(on?'rgba(255,216,106,.15)':'rgba(255,255,255,.05)')+';color:'+(on?'#ffd86a':'#c9bce6')+';font-weight:800;font-size:14px;line-height:1.2">'+label+
-        '<div style="font-size:10px;font-weight:600;opacity:.7;margin-top:2px">'+desc+'</div></button>'; };
     overlay.innerHTML =
       '<div class="menu">'+
         '<div class="menuAmb"><i></i><i></i><i></i><i></i></div>'+
         '<div class="menuHero">'+ICON.gem+
           '<div class="logo">PLOX</div><div class="logoSub">霓 虹 消 除</div></div>'+
-        '<div class="bestRibbon">'+ICON.star+'<span>本难度最高</span><b id="bestVal">'+nfmt(model.getBest(model.diffKey))+'</b></div>'+
-        '<div class="diffCards">'+diffCardHTML("easy")+diffCardHTML("normal")+diffCardHTML("hard")+'</div>'+
-        '<div class="modeTabs" style="display:flex;gap:8px;justify-content:center;margin:0 0 10px">'+
-          modeTab("endless","无尽","顶到底结束 · 冲分")+modeTab("campaign","闯关","一关一目标 · 可重试")+'</div>'+
+        '<div class="bestRibbon">'+ICON.star+'<span>历史最高</span><b id="bestVal">'+nfmt(model.getBest(model.diffKey))+'</b></div>'+
         '<button class="playBtn" id="playBtn">'+ICON.play+'<span>开始</span></button>'+
         '<div class="menuActions">'+
           '<button class="actBtn shop" id="shopLink">'+ICON.cart+'<span>商店</span></button>'+
@@ -57,16 +52,74 @@ export function createUI({ overlay, $, model, view, audio, lb, ctrl, isMobile })
       '</div>';
     overlay.classList.remove("hidden");
     view.hud.syncCoins();
-    [...overlay.querySelectorAll(".diffCard")].forEach(b=>b.addEventListener("click",()=>{
-      model.setDiffKey(b.dataset.k);
-      [...overlay.querySelectorAll(".diffCard")].forEach(x=>x.classList.toggle("on",x.dataset.k===model.diffKey));
-      model.refreshHigh(); const bv=$("bestVal"); if(bv) bv.textContent=nfmt(model.getBest(model.diffKey));
-    }));
-    [...overlay.querySelectorAll(".modeTab")].forEach(b=>b.addEventListener("click",()=>{ model.setMode(b.dataset.mode); showMenu(); }));
-    $("playBtn").addEventListener("click", ctrl.start);
+    $("playBtn").addEventListener("click", ()=>showModeSelect());
     $("shopLink").addEventListener("click", ()=>showShop());
     $("lbLink").addEventListener("click", ()=>showLeaderboard());
     $("rulesLink").addEventListener("click", ()=>showRules(false));
+  }
+
+  // 向导第 1 步:选模式(无尽 / 闯关)。用 state="menu" 防止空格键跳过向导
+  function showModeSelect(){
+    model.setState("menu");
+    const card=(m,label,desc)=>{ const on=model.mode===m;
+      return '<button class="modeCard" data-mode="'+m+'" style="display:block;width:100%;max-width:340px;margin:0 auto 12px;padding:16px 18px;border-radius:16px;cursor:pointer;text-align:left;border:1.5px solid '+(on?'#ffd86a':'rgba(255,255,255,.14)')+';background:'+(on?'rgba(255,216,106,.14)':'rgba(255,255,255,.05)')+';color:'+(on?'#ffd86a':'#e7defc')+'">'+
+        '<div style="font-size:19px;font-weight:800">'+label+'</div>'+
+        '<div style="font-size:12px;font-weight:600;opacity:.7;margin-top:4px">'+desc+'</div></button>'; };
+    overlay.innerHTML=
+      '<div class="ovr">'+
+        '<h1 class="ovTitle">选择模式</h1>'+
+        card("endless","无尽","顶到底结束 · 冲高分上榜")+
+        card("campaign","闯关","一关一目标 · 逐关解锁 · 可重试")+
+        '<div class="link" id="modeBack">返回</div>'+
+      '</div>';
+    overlay.classList.remove("hidden");
+    [...overlay.querySelectorAll(".modeCard")].forEach(b=>b.addEventListener("click",()=>{ model.setMode(b.dataset.mode); showDiffSelect(); }));
+    $("modeBack").addEventListener("click", showMenu);
+  }
+
+  // 向导第 2 步:选难度(点卡即选即进)。无尽→直接开局;闯关→选关页
+  function showDiffSelect(){
+    model.setState("menu");
+    overlay.innerHTML=
+      '<div class="ovr">'+
+        '<h1 class="ovTitle">选择难度</h1>'+
+        '<div class="ovHint">'+(model.mode==="campaign"?"闯关":"无尽")+' · 点难度直接开始</div>'+
+        '<div class="diffCards">'+diffCardHTML("easy")+diffCardHTML("normal")+diffCardHTML("hard")+'</div>'+
+        '<div class="link" id="diffBack">返回</div>'+
+      '</div>';
+    overlay.classList.remove("hidden");
+    [...overlay.querySelectorAll(".diffCard")].forEach(b=>b.addEventListener("click",()=>{
+      model.setDiffKey(b.dataset.k); model.refreshHigh();
+      if(model.mode==="campaign") showLevelSelect(); else ctrl.start();
+    }));
+    $("diffBack").addEventListener("click", showModeSelect);
+  }
+
+  // 向导第 3 步(仅闯关):选关卡。已解锁亮色可点、当前关高亮、未解锁暗灰不可点
+  function showLevelSelect(onBack){
+    model.setState("menu");
+    const diff=model.diffKey, unlocked=Math.max(1, model.getCampaignMax(diff));
+    const total=Math.max(10, Math.ceil((unlocked+2)/5)*5);   // 显示到解锁上限 + 前瞻几关(锁着)
+    let cells="";
+    for(let lv=1; lv<=total; lv++){
+      const locked=lv>unlocked, cur=lv===unlocked;
+      const border=cur?'#ffd86a':(locked?'rgba(255,255,255,.06)':'rgba(255,255,255,.16)');
+      const bg=cur?'rgba(255,216,106,.18)':(locked?'rgba(255,255,255,.03)':'rgba(255,255,255,.06)');
+      const col=locked?'#5a5570':(cur?'#ffd86a':'#e7defc');
+      cells+='<button class="lvCell'+(locked?' locked':'')+'"'+(locked?' disabled':'')+' data-lv="'+lv+'" '+
+        'style="aspect-ratio:1;border-radius:12px;font-weight:800;font-size:16px;cursor:'+(locked?'default':'pointer')+
+        ';border:1.5px solid '+border+';background:'+bg+';color:'+col+'">'+lv+'</button>';
+    }
+    overlay.innerHTML=
+      '<div class="ovr">'+
+        '<h1 class="ovTitle">选择关卡</h1>'+
+        '<div class="ovHint">'+DIFFS[diff].label+' · 已解锁到第 '+unlocked+' 关</div>'+
+        '<div class="lvGrid" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;max-height:46vh;overflow-y:auto;padding:2px;margin:6px 0 12px">'+cells+'</div>'+
+        '<div class="link" id="lsBack">返回</div>'+
+      '</div>';
+    overlay.classList.remove("hidden");
+    [...overlay.querySelectorAll(".lvCell:not(.locked)")].forEach(b=>b.addEventListener("click",()=>ctrl.start(+b.dataset.lv)));
+    $("lsBack").addEventListener("click", onBack || showDiffSelect);
   }
 
   // ---------- 玩法说明 ----------
@@ -169,8 +222,9 @@ export function createUI({ overlay, $, model, view, audio, lb, ctrl, isMobile })
   }
 
   // ---------- 排行榜 ----------
-  let lbCache=null;
-  function showLeaderboard(diff, hiName, hiScore){
+  let lbCache=null, lbReturn="menu";   // 记住排行榜从哪进来的("menu"|"settle"),返回时回对页
+  function showLeaderboard(diff, hiName, hiScore, from){
+    lbReturn = from || "menu";
     model.setState("menu"); audio.stopMusic();
     const d=DIFF_KEYS.includes(diff)?diff:model.diffKey;
     const hi=hiName || (localStorage.getItem(NAME_KEY)||"");
@@ -190,7 +244,7 @@ export function createUI({ overlay, $, model, view, audio, lb, ctrl, isMobile })
       '<button class="play" id="lbBack">返回</button>';
     overlay.classList.remove("hidden");
     [...overlay.querySelectorAll('.lbtabs b')].forEach(b=>b.addEventListener('click',()=>renderLb(b.dataset.d,hiName,hiScore)));
-    $("lbBack").addEventListener("click", showMenu);
+    $("lbBack").addEventListener("click", ()=> lbReturn==="settle" ? showSettle() : showMenu());
   }
   function showNameEntry(){
     model.setState("menu"); audio.stopMusic();
@@ -212,7 +266,7 @@ export function createUI({ overlay, $, model, view, audio, lb, ctrl, isMobile })
       lb.addToLB(raw, {score:model.score, level:model.level, combo:model.maxCombo, diff:model.diffKey});
       overlay.innerHTML='<h1>上传中…</h1><p style="font-size:12px;color:var(--dim)">正在提交到全球排行榜</p>';
       await submitGlobal({name:nm, score:snapScore, diff:snapDiff});
-      showLeaderboard(snapDiff, nm, snapScore);
+      showLeaderboard(snapDiff, nm, snapScore, "settle");
     };
     $("nameOk").addEventListener("click", submit);
     inp.addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); submit(); } });
@@ -272,20 +326,20 @@ export function createUI({ overlay, $, model, view, audio, lb, ctrl, isMobile })
       '<div class="ovr">'+
         '<h1 class="ovTitle">结算</h1>'+
         '<div class="settleScore"><span>本局得分</span><b>'+nfmt(model.score)+'</b></div>'+
-        '<div class="settleStats">'+sc3("关卡",model.level)+sc3("消除",model.cleared)+sc3("最高连击","×"+model.maxCombo)+'</div>'+
-        '<div class="settleMeta">历史最高 '+nfmt(model.high)+' · 最高关卡 '+model.getBestStage(model.diffKey)+'</div>'+
+        '<div class="settleStats">'+sc3(model.mode==="endless"?"速度":"关卡",model.level)+sc3("消除",model.cleared)+sc3("最高连击","×"+model.maxCombo)+'</div>'+
+        '<div class="settleMeta">历史最高 '+nfmt(model.high)+' · '+(model.mode==="endless"?"最高速度 ":"最高关卡 ")+model.getBestStage(model.diffKey)+'</div>'+
         '<button class="play" id="againBtn"><span>再来一局</span></button>'+
         '<div class="settleActions">'+
           (model.score>0?'<button class="actBtn2" id="uploadBtn">上传成绩</button>':'')+
           '<button class="actBtn2" id="shopBtn2">商店</button>'+
           '<button class="actBtn2" id="lbBtn2">排行榜</button>'+
         '</div>'+
-        '<div class="link" id="toMenu">选择难度</div>'+
+        '<div class="link" id="toMenu">返回主菜单</div>'+
       '</div>';
-    $("againBtn").addEventListener("click", ctrl.start);
+    $("againBtn").addEventListener("click", ()=>ctrl.start(model.mode==="campaign"?model.level:undefined));   // 闯关再来一局回当前关
     if($("uploadBtn")) $("uploadBtn").addEventListener("click", ()=>showNameEntry());
     $("shopBtn2").addEventListener("click", ()=>showShop("settle"));
-    $("lbBtn2").addEventListener("click", ()=>showLeaderboard());
+    $("lbBtn2").addEventListener("click", ()=>showLeaderboard(model.diffKey, undefined, undefined, "settle"));
     $("toMenu").addEventListener("click", showMenu);
   }
 

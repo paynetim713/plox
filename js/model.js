@@ -28,6 +28,9 @@ export function createModel(deps){
   function refreshHigh(){ high=getBest(diffKey); ui.setHigh(high); }
   function getBestStage(d){ try{ return +((JSON.parse(localStorage.getItem("plox_beststage"))||{})[d]||0); }catch(e){ return 0; } }
   function recordBestStage(s){ try{ const b=JSON.parse(localStorage.getItem("plox_beststage"))||{}; if(s>(b[diffKey]||0)){ b[diffKey]=s; localStorage.setItem("plox_beststage",JSON.stringify(b)); } }catch(e){} }
+  // 闯关解锁进度:独立键、按难度分、仅闯关写入(避免刷无尽把闯关关卡一起解锁)
+  function getCampaignMax(d){ try{ return +((JSON.parse(localStorage.getItem("plox_campaign"))||{})[d]||0); }catch(e){ return 0; } }
+  function recordCampaignMax(s){ try{ const b=JSON.parse(localStorage.getItem("plox_campaign"))||{}; if(s>(b[diffKey]||0)){ b[diffKey]=s; localStorage.setItem("plox_campaign",JSON.stringify(b)); } }catch(e){} }
 
   // ---------- 工具 ----------
   const rc=()=>(Math.random()*colorCount)|0;
@@ -121,7 +124,7 @@ export function createModel(deps){
       const reward = (level%5===0) ? 1 : 0;
       if(reward){ addCoins(reward); ui.syncCoins(); }
       recordBestStage(level);
-      if(mode==="campaign") pendingLevelClear=true;   // 闯关:过关后清空棋盘,开新一关
+      if(mode==="campaign"){ recordCampaignMax(level); pendingLevelClear=true; }   // 闯关:解锁新关 + 过关后清空棋盘
       fx.spawnStageBanner(level, reward);
     }
   }
@@ -144,7 +147,8 @@ export function createModel(deps){
     ui.syncHUD();
   }
   function applyClear(){
-    const pn=9+Math.min(combo,6)*2;
+    let pn=5+Math.min(combo,4)*2;                                  // 基础喷发下调(原 9+min(combo,6)*2)
+    pn=Math.max(3, Math.round(pn*Math.min(1, 24/clearing.size)));  // 大消除按规模反比封顶,总量不再线性膨胀
     for(const key of clearing){ const [r,c]=key.split(",").map(Number);
       fx.spawnParticles(c,r,board[r][c],pn); board[r][c]=null; voff[r][c]=0; vmode[r][c]=0; vscale[r][c]=1; }
     clearing=null; gravity(); beginResolve();
@@ -233,7 +237,7 @@ export function createModel(deps){
     state="gameover"; audio.stopMusic(); softDrop=false; beep(140,.25,"sawtooth",.15);
     if(score>high){ high=score; setBest(diffKey,score); ui.setHigh(high); }
     recordBestStage(level);
-    if(mode==="campaign") on.levelFail(); else on.gameOver();
+    if(mode==="campaign"){ recordCampaignMax(level); on.levelFail(); } else on.gameOver();
   }
   // 闯关失败重试本关:清空棋盘,保留关数与分数,本关目标重新计(不含 spawn,由 Controller 接管)
   function retryLevel(){
@@ -329,6 +333,6 @@ export function createModel(deps){
     setState(s){ state=s; }, setDiffKey(k){ diffKey=k; }, setSoftDrop(b){ softDrop=b; }, setMode(m){ mode=m; },
     // 方法
     reset, spawn, move, rotate, hardDrop, useBomb, dropTick, resolveTick, updateAnim, revive, retryLevel, ghostRow,
-    getBest, getBestStage, refreshHigh, dropJunk, stageGoal,
+    getBest, getBestStage, getCampaignMax, refreshHigh, dropJunk, stageGoal,
   };
 }
